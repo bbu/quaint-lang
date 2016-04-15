@@ -42,6 +42,7 @@ which holds its execution context and stack.
   * [Significant differences from C](#c-differences)
   * [Built-in type table](#built-in-type-table)
   * [Operator table](#operator-table)
+  * [Built-in functions](#built-in-functions)
   * [The interesting part: resumable functions](#resumable-functions)
     * [What is a `quaint()`?](#what-is-a-quaint)
     * [The `~` "quaintify" operator](#tilde-operator)
@@ -62,6 +63,8 @@ which holds its execution context and stack.
 Clang or GCC. Additionally, an Xcode project can be built and debugged under OS
 X. When building with make, the executable will be put in `./build/make/quaint`.
 When building with Xcode, the executable will be in `./build/xcode/quaint`.
+
+To try it, type `./build/make/quaint ./examples/fibonacci.q`.
 
 Other Unixes have not been tested, but Quaint should very likely be able to work
 there as it depends only on the C standard library and POSIX system calls.
@@ -279,6 +282,28 @@ size, alignment and order of their members.
 
 The semantics and precedence levels of the operators inherited from C should be
 the same. If you spot any "unintuitive" precedence parsing, send me feedback.
+
+<a id="built-in-functions"></a>
+## Built-in functions
+
+| Signature                                                                    |
+| ---------------------------------------------------------------------------- |
+| `monotime: u64`                                                              |
+| `malloc(size: usize): vptr`                                                  |
+| `calloc(size: usize): vptr`                                                  |
+| `realloc(oldptr: vptr, newsize: usize): vptr`                                |
+| `free(ptr: vptr)`                                                            |
+| `ps(str: ptr(byte))`                                                         |
+| `pu8(num: u8)`                                                               |
+| `pi8(num: i8)`                                                               |
+| `pu16(num: u16)`                                                             |
+| `pi16(num: i16)`                                                             |
+| `pu32(num: u32)`                                                             |
+| `pi32(num: i32)`                                                             |
+| `pu64(num: u64)`                                                             |
+| `pi64(num: i64)`                                                             |
+| `pnl`                                                                        |
+| `exit(status: i32)`                                                          |
 
 <a id="resumable-functions"></a>
 ## The interesting part: resumable functions

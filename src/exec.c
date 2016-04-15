@@ -222,6 +222,96 @@ static void check_and_eventually_split_vms(void)
     }
 }
 
+static void cleanup_temps(void **const temps)
+{
+    free(*temps);
+}
+
+static int handle_return(const struct codegen_insn *insn,
+    const uint64_t retval_size, const void *const retval)
+{
+    void *old_temps __attribute__((__cleanup__(cleanup_temps))) = vm->temps;
+    (void) old_temps;
+
+    if (vm->sp == 0 && vm->parent) {
+        insn = &o->insns[vm->parent->ip];
+
+        LEGAL_IF(insn->op == (retval_size ? CODEGEN_OP_RTEV : CODEGEN_OP_RTE) ||
+            insn->op == CODEGEN_OP_WAIT, "");
+
+        switch (insn->op) {
+        case CODEGEN_OP_RTEV: {
+            struct qvm *const old_vm = vm;
+            vm = vm->parent;
+            const uint64_t cval_size = opd_size(&insn->un.dst);
+            void *const cval = opd_val(&insn->un.dst);
+
+            LEGAL_IF(retval_size == cval_size, "%" PRIu64 ", %" PRIu64,
+                retval_size, cval_size);
+
+            memcpy(cval, retval, (size_t) cval_size);
+            free(old_vm);
+            *(uint64_t *) opd_val(&insn->un.src) = 0;
+        } break;
+
+        case CODEGEN_OP_RTE: {
+            struct qvm *const old_vm = vm;
+            vm = vm->parent;
+            free(old_vm);
+            *(uint64_t *) opd_val(&insn->un.src) = 0;
+        } break;
+
+        case CODEGEN_OP_WAIT: {
+            vm->at_end = 1;
+            vm->last_passed.func = 0;
+            vm->last_passed.id = 0;
+
+            if (retval_size) {
+                memcpy(vm->stack, retval, (size_t) retval_size);
+            }
+
+            vm->temps = NULL;
+            vm = vm->parent;
+            vm->waiting = 0;
+            vm->waiting_for = 0;
+            vm->waiting_until = 0;
+            vm->waiting_noblock = 0;
+        } break;
+        }
+
+        vm->ip++;
+    } else if (vm->sp == 0) {
+        const int status = retval_size ? exit_status_from_retval(insn) : 0;
+        vm->temps = NULL;
+        vm->ip = *(uint64_t *) (vm->stack + vm->sp);
+        vm->bp = *(uint64_t *) (vm->stack + vm->sp + 8);
+        return status;
+    } else {
+        vm->temps = vm->temps->prev;
+        vm->ip = *(uint64_t *) (vm->stack + vm->sp);
+        vm->bp = *(uint64_t *) (vm->stack + vm->sp + 8);
+
+        LEGAL_IF(vm->ip < o->insn_count, "%" PRIu64, vm->ip);
+        LEGAL_IF(vm->bp <= STACK_SIZE, "%" PRIu64, vm->bp);
+
+        if (retval_size) {
+            insn = &o->insns[vm->ip];
+            LEGAL_IF(insn->op == CODEGEN_OP_CALLV, "");
+            const uint64_t cval_size = opd_size(&insn->call.val);
+
+            LEGAL_IF(retval_size == cval_size, "%" PRIu64 ", %" PRIu64,
+                retval_size, cval_size);
+
+            void *const cval = opd_val(&insn->call.val);
+            memcpy(cval, retval, (size_t) cval_size);
+        }
+
+        vm->ip++;
+    }
+
+    return EXEC_OK;
+}
+
 static int insn_mov(const struct codegen_insn *const insn)
 {
     assert(insn->op == CODEGEN_OP_MOV);
@@ -927,15 +1017,9 @@ static int insn_incsp(const struct codegen_insn *const insn)
     return EXEC_OK;
 }
 
-static void cleanup_temps(void **const temps)
-{
-    free(*temps);
-}
-
-static int insn_ret_retv(const struct codegen_insn *insn)
+static int insn_ret_retv(const struct codegen_insn *const insn)
 {
     assert(insn->op == CODEGEN_OP_RET || insn->op == CODEGEN_OP_RETV);
-    const bool with_value = insn->op == CODEGEN_OP_RETV;
 
     LEGAL_IF(vm->sp % 8 == 0, "%" PRIu64, vm->sp);
     LEGAL_IF(vm->bp % 8 == 0, "%" PRIu64, vm->bp);
@@ -954,97 +1038,13 @@ static int insn_ret_retv(const struct codegen_insn *insn)
 
     LEGAL_IF(vm->sp >= size, "%" PRIu64 ", %" PRIu64, vm->sp, size);
     LEGAL_IF(vm->temps != NULL, "");
-
     vm->sp -= size;
-    void *old_temps __attribute__((__cleanup__(cleanup_temps))) = vm->temps;
-    (void) old_temps;
 
-    if (vm->temps->prev == NULL) {
-        if (vm->parent) {
-            const struct codegen_insn *const old_insn = insn;
-            insn = &o->insns[vm->parent->ip];
+    const bool with_value = insn->op == CODEGEN_OP_RETV;
+    const uint64_t retval_size = with_value ? opd_size(&insn->ret.val) : 0;
+    const void *const retval = with_value ? opd_val(&insn->ret.val) : NULL;
 
-            LEGAL_IF(insn->op == (with_value ? CODEGEN_OP_RTEV : CODEGEN_OP_RTE) ||
-                insn->op == CODEGEN_OP_WAIT, "");
-
-            switch (insn->op) {
-            case CODEGEN_OP_RTEV: {
-                const uint64_t retval_size = opd_size(&old_insn->ret.val);
-                const void *const retval = opd_val(&old_insn->ret.val);
-                struct qvm *const old_vm = vm;
-                vm = vm->parent;
-                const uint64_t cval_size = opd_size(&insn->un.dst);
-                void *const cval = opd_val(&insn->un.dst);
-
-                LEGAL_IF(retval_size == cval_size, "%" PRIu64 ", %" PRIu64,
-                    retval_size, cval_size);
-
-                memcpy(cval, retval, (size_t) cval_size);
-                free(old_vm);
-                *(uint64_t *) opd_val(&insn->un.src) = 0;
-            } break;
-
-            case CODEGEN_OP_RTE: {
-                struct qvm *const old_vm = vm;
-                vm = vm->parent;
-                free(old_vm);
-                *(uint64_t *) opd_val(&insn->un.src) = 0;
-            } break;
-
-            case CODEGEN_OP_WAIT: {
-                vm->at_end = 1;
-                vm->last_passed.func = 0;
-                vm->last_passed.id = 0;
-
-                if (with_value) {
-                    const uint64_t retval_size = opd_size(&old_insn->ret.val);
-                    const void *const retval = opd_val(&old_insn->ret.val);
-                    memcpy(vm->stack, retval, (size_t) retval_size);
-                }
-
-                vm->temps = NULL;
-                vm = vm->parent;
-                vm->waiting = 0;
-                vm->waiting_for = 0;
-                vm->waiting_until = 0;
-                vm->waiting_noblock = 0;
-            } break;
-            }
-
-            vm->ip++;
-        } else {
-            const int status = with_value ? exit_status_from_retval(insn) : 0;
-            vm->temps = NULL;
-            vm->ip = *(uint64_t *) (vm->stack + vm->sp);
-            vm->bp = *(uint64_t *) (vm->stack + vm->sp + 8);
-            return status;
-        }
-    } else {
-        const uint64_t retval_size = with_value ? opd_size(&insn->ret.val) : 0;
-        const void *const retval = with_value ? opd_val(&insn->ret.val) : NULL;
-        vm->temps = vm->temps->prev;
-        vm->ip = *(uint64_t *) (vm->stack + vm->sp);
-        vm->bp = *(uint64_t *) (vm->stack + vm->sp + 8);
-
-        LEGAL_IF(vm->ip < o->insn_count, "%" PRIu64, vm->ip);
-        LEGAL_IF(vm->bp <= STACK_SIZE, "%" PRIu64, vm->bp);
-
-        if (with_value) {
-            insn = &o->insns[vm->ip];
-            LEGAL_IF(insn->op == CODEGEN_OP_CALLV, "");
-            const uint64_t cval_size = opd_size(&insn->call.val);
-
-            LEGAL_IF(retval_size == cval_size, "%" PRIu64 ", %" PRIu64,
-                retval_size, cval_size);
-
-            void *const cval = opd_val(&insn->call.val);
-            memcpy(cval, retval, (size_t) cval_size);
-        }
-
-        vm->ip++;
-    }
-
-    return EXEC_OK;
+    return handle_return(insn, retval_size, retval);
 }
 
 static int insn_ref(const struct codegen_insn *const insn)
@@ -1373,11 +1373,13 @@ static int insn_noint_int(const struct codegen_insn *const insn)
 static int insn_bfun(const struct codegen_insn *const insn)
 {
     assert(insn->op == CODEGEN_OP_BFUN);
-    (void) insn;
 
     LEGAL_IF(vm->sp % 8 == 0, "%" PRIu64, vm->sp);
     LEGAL_IF(vm->bp % 8 == 0, "%" PRIu64, vm->bp);
     LEGAL_IF(vm->sp >= 16, "%" PRIu64, vm->sp);
+
+    uint64_t retval_size = 0;
+    const void *retval = NULL;
 
     switch (vm->ip) {
     case SCOPE_BFUN_ID_NULL:
@@ -1385,15 +1387,46 @@ static int insn_bfun(const struct codegen_insn *const insn)
         break;
 
     case SCOPE_BFUN_ID_MONOTIME:
-        LEGAL_IF(0, "monotime() still not implemented");
+        if (unlikely(get_monotonic_time(&now))) {
+            return EXEC_NOMEM;
+        }
+
+        retval_size = sizeof(now);
+        retval = &now;
         break;
 
     case SCOPE_BFUN_ID_MALLOC:
-    case SCOPE_BFUN_ID_CALLOC:
-    case SCOPE_BFUN_ID_REALLOC:
-    case SCOPE_BFUN_ID_FREE:
-        LEGAL_IF(0, "*alloc()/free() still not implemented");
-        break;
+    case SCOPE_BFUN_ID_CALLOC: {
+        LEGAL_IF(vm->sp >= 16 + 8, "%" PRIu64, vm->sp);
+        LEGAL_IF(vm->bp + 8 <= STACK_SIZE, "%" PRIu64, vm->bp);
+        retval_size = 8;
+        const size_t size = (size_t) *(uint64_t *) (vm->stack + vm->bp);
+
+        const void *const mem = vm->ip == SCOPE_BFUN_ID_MALLOC ?
+            malloc(size) : calloc(1, size);
+
+        retval = &mem;
+        vm->sp -= 8;
+    } break;
+
+    case SCOPE_BFUN_ID_REALLOC: {
+        LEGAL_IF(vm->sp >= 16 + 16, "%" PRIu64, vm->sp);
+        LEGAL_IF(vm->bp + 16 <= STACK_SIZE, "%" PRIu64, vm->bp);
+        retval_size = 8;
+        void *const oldptr = (void *) (uintptr_t) *(uint64_t *) (vm->stack + vm->bp);
+        const size_t newsize = (size_t) *(uint64_t *) (vm->stack + vm->bp + 8);
+        const void *const mem = realloc(oldptr, newsize);
+        retval = &mem;
+        vm->sp -= 16;
+    } break;
+
+    case SCOPE_BFUN_ID_FREE: {
+        LEGAL_IF(vm->sp >= 16 + 8, "%" PRIu64, vm->sp);
+        LEGAL_IF(vm->bp + 8 <= STACK_SIZE, "%" PRIu64, vm->bp);
+        void *const ptr = (void *) (uintptr_t) *(uint64_t *) (vm->stack + vm->bp);
+        free(ptr);
+        vm->sp -= 8;
+    } break;
 
     case SCOPE_BFUN_ID_PS:
         LEGAL_IF(vm->sp >= 16 + 8, "%" PRIu64, vm->sp);
@@ -1463,15 +1496,22 @@ static int insn_bfun(const struct codegen_insn *const insn)
     case SCOPE_BFUN_ID_EXIT:
         LEGAL_IF(vm->sp >= 16 + 8, "%" PRIu64, vm->sp);
         LEGAL_IF(vm->bp + 4 <= STACK_SIZE, "%" PRIu64, vm->bp);
+        vm->sp -= 8;
         exit(*(int32_t *) (vm->stack + vm->bp));
         break;
     }
 
     vm->sp -= 16;
-    vm->ip = *(uint64_t *) (vm->stack + vm->sp) + 1;
-    vm->bp = *(uint64_t *) (vm->stack + vm->sp + 8);
+    struct tmp_frame *const new_tmp_frame = malloc(sizeof(struct tmp_frame));
 
-    return EXEC_OK;
+    if (unlikely(!new_tmp_frame)) {
+        return EXEC_NOMEM;
+    }
+
+    new_tmp_frame->prev = vm->temps;
+    vm->temps = new_tmp_frame;
+
+    return handle_return(insn, retval_size, retval);
 }
 
 static int exec_insn(const struct codegen_insn *const insn)
