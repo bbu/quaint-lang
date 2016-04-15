@@ -495,6 +495,13 @@ The way of printing output via the comma operator is indeed rather clunky, but
 that will be the way until variadic functions are implemented and `printf`-like
 functions appear.
 
+The name `entry` is not special – Quaint currently starts execution from the
+first defined function. Adding parameters to that first function is currenly
+undefined behaviour.
+
+Initialisation of global variables is syntactically supported, but currently has
+no effect – all global variables have zero values upon program startup.
+
 <a id="lacking-features"></a>
 ## Currently lacking features compared to C
 
