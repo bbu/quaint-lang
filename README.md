@@ -473,7 +473,7 @@ entry
 
     do {
         wait fibq for 1000 msec;
-        ps("Iteration "), pu32(iter++:u32), pnl();
+        ps("Iteration "), pu32(iter++), pnl();
     } while !fibq@end;
 
     ps("At end: "), pu8(fibq@end), pnl();
@@ -496,7 +496,7 @@ that will be the way until variadic functions are implemented and `printf`-like
 functions appear.
 
 The name `entry` is not special – Quaint currently starts execution from the
-first defined function. Adding parameters to that first function is currenly
+first defined function. Adding parameters to that first function is currently
 undefined behaviour.
 
 Initialisation of global variables is syntactically supported, but currently has

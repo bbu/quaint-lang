@@ -15,7 +15,7 @@ entry
 
     do {
         wait fibq for 1000 msec;
-        ps("Iteration "), pu32(iter++:u32), pnl();
+        ps("Iteration "), pu32(iter++), pnl();
     } while !fibq@end;
 
     ps("At end: "), pu8(fibq@end), pnl();
