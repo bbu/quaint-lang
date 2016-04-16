@@ -64,6 +64,10 @@ Clang or GCC. Additionally, an Xcode project can be built and debugged under OS
 X. When building with make, the executable will be put in `./build/make/quaint`.
 When building with Xcode, the executable will be in `./build/xcode/quaint`.
 
+Note: building with the `-flto` link-time optimisation flag tends to fail on
+some older GCC versions. GCC seems to do some improper optimisations at `-O2`,
+too. Prefer Clang for building.
+
 To try it, type `./build/make/quaint ./examples/fibonacci.q`.
 
 Other Unixes have not been tested, but Quaint should very likely be able to work
