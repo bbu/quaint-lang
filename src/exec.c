@@ -1402,8 +1402,8 @@ static int insn_bfun(const struct codegen_insn *const insn)
         retval_size = 8;
         const size_t size = (size_t) *(uint64_t *) (vm->stack + vm->bp);
 
-        const void *const mem = vm->ip == SCOPE_BFUN_ID_MALLOC ?
-            malloc(size) : calloc(1, size);
+        const uint64_t mem = vm->ip == SCOPE_BFUN_ID_MALLOC ?
+            (uint64_t) (uintptr_t) malloc(size) : (uint64_t) (uintptr_t) calloc(1, size);
 
         retval = &mem;
         vm->sp -= 8;
@@ -1415,7 +1415,7 @@ static int insn_bfun(const struct codegen_insn *const insn)
         retval_size = 8;
         void *const oldptr = (void *) (uintptr_t) *(uint64_t *) (vm->stack + vm->bp);
         const size_t newsize = (size_t) *(uint64_t *) (vm->stack + vm->bp + 8);
-        const void *const mem = realloc(oldptr, newsize);
+        const uint64_t mem = (uint64_t) (uintptr_t) realloc(oldptr, newsize);
         retval = &mem;
         vm->sp -= 16;
     } break;
