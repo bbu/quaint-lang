@@ -232,10 +232,10 @@ static int validate_wlab(const struct parse_node *, struct ast_node **,
 static int validate_stmt(const struct parse_node *const stmt,
     struct ast_node **, const struct ast_node *);
 
-#define ast_alloc_node(_node, extra) \
+#define alloc_node(_node, extra) \
     calloc(1, sizeof(struct ast_node) + sizeof(struct ast_##_node) + (extra))
 
-#define ast_set_node(node, a, p, pn) ({ \
+#define set_node(node, a, p, pn) ({ \
     (node)->an = (a); \
     (node)->parent = (p); \
     parse_node_ltok_rtok((pn), &(node)->ltok, &(node)->rtok); \
@@ -602,11 +602,11 @@ static int validate_wlab(const struct parse_node *const stmt,
         return INVALID("expecting a label name", expr);
     }
 
-    if (unlikely(!(*ast = ast_alloc_node(wlab, 0)))) {
+    if (unlikely(!(*ast = alloc_node(wlab, 0)))) {
         return NOMEM;
     }
 
-    ast_set_node(*ast, AST_AN_WLAB, parent, stmt);
+    set_node(*ast, AST_AN_WLAB, parent, stmt);
     ast_data(*ast, wlab)->name = (struct lex_symbol *)
         expr->children[0]->children[0]->token;
 
@@ -619,7 +619,7 @@ static int validate_blok(const struct parse_node *const blok,
     const uint8_t noint = parse_node_tk(blok->children[0]) == LEX_TK_NOIN;
     const size_t stmt_count = blok->nchildren - 2 - noint;
 
-    if (unlikely(!(*ast = ast_alloc_node(blok,
+    if (unlikely(!(*ast = alloc_node(blok,
         stmt_count * sizeof(struct ast_node *))))) {
 
         return NOMEM;
@@ -628,7 +628,7 @@ static int validate_blok(const struct parse_node *const blok,
     struct ast_node *const ast_node = *ast;
     struct ast_blok *const ast_blok = ast_data(*ast, blok);
 
-    ast_set_node(ast_node, noint ? AST_AN_NOIN : AST_AN_BLOK, parent, blok);
+    set_node(ast_node, noint ? AST_AN_NOIN : AST_AN_BLOK, parent, blok);
     ast_blok->stmt_count = stmt_count;
 
     return validate_stmts(stmt_count, noint + 1,
@@ -664,7 +664,7 @@ static int validate_func(const struct parse_node *const func,
 
     const size_t stmt_count = func->nchildren - qual_count - 3;
 
-    if (unlikely(!(*ast = ast_alloc_node(func,
+    if (unlikely(!(*ast = alloc_node(func,
         stmt_count * sizeof(struct ast_node *))))) {
 
         return NOMEM;
@@ -740,7 +740,7 @@ static int validate_func(const struct parse_node *const func,
         return INVALID("bad function signature", child);
     }
 
-    ast_set_node(ast_node, AST_AN_FUNC, parent, func);
+    set_node(ast_node, AST_AN_FUNC, parent, func);
     ast_func->expo = exposed;
     ast_func->stmt_count = stmt_count;
 
@@ -771,7 +771,7 @@ static int validate_cond(const struct parse_node *const ctrl,
     size_t elif_count, else_idx;
     count_elif_else(ctrl, &elif_count, &else_idx);
 
-    if (unlikely(!(*ast = ast_alloc_node(cond,
+    if (unlikely(!(*ast = alloc_node(cond,
         elif_count * sizeof(((struct ast_cond *) NULL)->elif[0]))))) {
 
         return NOMEM;
@@ -780,19 +780,19 @@ static int validate_cond(const struct parse_node *const ctrl,
     struct ast_node *const ast_node = *ast;
     struct ast_cond *const ast_cond = ast_data(*ast, cond);
 
-    ast_set_node(ast_node, AST_AN_COND, parent, ctrl);
+    set_node(ast_node, AST_AN_COND, parent, ctrl);
     ast_cond->elif_count = elif_count;
 
     const struct parse_node *const cond = ctrl->children[0];
     int error = validate_expr(cond->children[1], &ast_cond->if_expr, ast_node);
     const size_t if_stmt_count = cond->nchildren - 4;
 
-    if (unlikely(!(ast_cond->if_block = ast_alloc_node(blok,
+    if (unlikely(!(ast_cond->if_block = alloc_node(blok,
         if_stmt_count * sizeof(struct ast_node *))))) {
 
         aggr_error(&error, NOMEM);
     } else {
-        ast_set_node(ast_cond->if_block, AST_AN_BLOK, ast_node, cond);
+        set_node(ast_cond->if_block, AST_AN_BLOK, ast_node, cond);
         ast_data(ast_cond->if_block, blok)->stmt_count = if_stmt_count;
 
         aggr_error(&error, validate_stmts(if_stmt_count, 3, cond->children,
@@ -806,12 +806,12 @@ static int validate_cond(const struct parse_node *const ctrl,
         aggr_error(&error, validate_expr(elif->children[1],
             &ast_cond->elif[elif_idx].expr, ast_node));
 
-        if (unlikely(!(ast_cond->elif[elif_idx].block = ast_alloc_node(blok,
+        if (unlikely(!(ast_cond->elif[elif_idx].block = alloc_node(blok,
             elif_stmt_count * sizeof(struct ast_node *))))) {
 
             aggr_error(&error, NOMEM);
         } else {
-            ast_set_node(ast_cond->elif[elif_idx].block, AST_AN_BLOK, ast_node, elif);
+            set_node(ast_cond->elif[elif_idx].block, AST_AN_BLOK, ast_node, elif);
             ast_data(ast_cond->elif[elif_idx].block, blok)->stmt_count =
                 elif_stmt_count;
 
@@ -825,12 +825,12 @@ static int validate_cond(const struct parse_node *const ctrl,
         const struct parse_node *const els = ctrl->children[else_idx];
         const size_t else_stmt_count = els->nchildren - 3;
 
-        if (unlikely(!(ast_cond->else_block = ast_alloc_node(blok,
+        if (unlikely(!(ast_cond->else_block = alloc_node(blok,
             else_stmt_count * sizeof(struct ast_node *))))) {
 
             aggr_error(&error, NOMEM);
         } else {
-            ast_set_node(ast_cond->else_block, AST_AN_BLOK, ast_node, els);
+            set_node(ast_cond->else_block, AST_AN_BLOK, ast_node, els);
             ast_data(ast_cond->else_block, blok)->stmt_count = else_stmt_count;
 
             aggr_error(&error, validate_stmts(else_stmt_count, 2, els->children,
@@ -846,7 +846,7 @@ static int validate_whil(const struct parse_node *const whil,
 {
     const size_t stmt_count = whil->nchildren - 4;
 
-    if (unlikely(!(*ast = ast_alloc_node(whil,
+    if (unlikely(!(*ast = alloc_node(whil,
         stmt_count * sizeof(struct ast_node *))))) {
 
         return NOMEM;
@@ -855,7 +855,7 @@ static int validate_whil(const struct parse_node *const whil,
     struct ast_node *const ast_node = *ast;
     struct ast_whil *const ast_whil = ast_data(*ast, whil);
 
-    ast_set_node(ast_node, AST_AN_WHIL, parent, whil);
+    set_node(ast_node, AST_AN_WHIL, parent, whil);
     ast_whil->stmt_count = stmt_count;
 
     int error = validate_expr(whil->children[1], &ast_whil->expr, *ast);
@@ -871,7 +871,7 @@ static int validate_dowh(const struct parse_node *const dowh,
 {
     const size_t stmt_count = dowh->nchildren - 6;
 
-    if (unlikely(!(*ast = ast_alloc_node(dowh,
+    if (unlikely(!(*ast = alloc_node(dowh,
         stmt_count * sizeof(struct ast_node *))))) {
 
         return NOMEM;
@@ -880,7 +880,7 @@ static int validate_dowh(const struct parse_node *const dowh,
     struct ast_node *const ast_node = *ast;
     struct ast_dowh *const ast_dowh = ast_data(*ast, dowh);
 
-    ast_set_node(ast_node, AST_AN_DOWH, parent, dowh);
+    set_node(ast_node, AST_AN_DOWH, parent, dowh);
     ast_dowh->stmt_count = stmt_count;
 
     int error = validate_stmts(stmt_count, 2,
@@ -910,7 +910,7 @@ static int validate_type(const struct parse_node *const stmt,
         return INVALID("expecting a colon after the type name", child);
     }
 
-    if (unlikely(!(*ast = ast_alloc_node(type, 0)))) {
+    if (unlikely(!(*ast = alloc_node(type, 0)))) {
         return NOMEM;
     }
 
@@ -926,10 +926,10 @@ static int validate_type(const struct parse_node *const stmt,
         return type_free(root_type), error;
     }
 
-    struct lex_symbol *type_name = (struct lex_symbol *)
+    const struct lex_symbol *const type_name = (const struct lex_symbol *)
         child->children[0]->children[0]->children[0]->token;
 
-    struct type_symtab_entry entry = {
+    const struct type_symtab_entry entry = {
         .type = root_type,
         .name = type_name,
     };
@@ -944,7 +944,7 @@ static int validate_type(const struct parse_node *const stmt,
     struct ast_node *const ast_node = *ast;
     struct ast_type *const ast_type = ast_data(*ast, type);
 
-    ast_set_node(ast_node, AST_AN_TYPE, parent, stmt);
+    set_node(ast_node, AST_AN_TYPE, parent, stmt);
     ast_type->expo = expo;
     ast_type->name = type_name;
     ast_type->type = root_type;
@@ -958,7 +958,7 @@ static int validate_retn(const struct parse_node *const stmt,
     const struct parse_node *const expr = stmt->nchildren == 3 ?
         stmt->children[1] : NULL;
 
-    if (unlikely(!(*ast = ast_alloc_node(retn, 0)))) {
+    if (unlikely(!(*ast = alloc_node(retn, 0)))) {
         return NOMEM;
     }
 
@@ -970,7 +970,7 @@ static int validate_retn(const struct parse_node *const stmt,
         return ast_destroy(ast_retn->expr), error;
     }
 
-    ast_set_node(ast_node, AST_AN_RETN, parent, stmt);
+    set_node(ast_node, AST_AN_RETN, parent, stmt);
     return AST_OK;
 }
 
@@ -1012,7 +1012,7 @@ static int validate_wait(const struct parse_node *const stmt,
     default: assert(0), abort();
     }
 
-    if (unlikely(!(*ast = ast_alloc_node(wait, 0)))) {
+    if (unlikely(!(*ast = alloc_node(wait, 0)))) {
         return NOMEM;
     }
 
@@ -1062,7 +1062,7 @@ static int validate_wait(const struct parse_node *const stmt,
     default: assert(0), abort();
     }
 
-    ast_set_node(ast_node, AST_AN_WAIT, parent, stmt);
+    set_node(ast_node, AST_AN_WAIT, parent, stmt);
     return AST_OK;
 }
 
@@ -1075,17 +1075,17 @@ static int validate_expr(const struct parse_node *const expr,
     case PARSE_NT_Expr: return validate_expr(expr->children[0], ast, parent);
     case PARSE_NT_Pexp: return validate_expr(expr->children[1], ast, parent);
     case PARSE_NT_Wexp: return INVALID("unexpected wexp", expr);
-    case PARSE_NT_Bexp: *ast = ast_alloc_node(bexp, 0); break;
-    case PARSE_NT_Uexp: *ast = ast_alloc_node(uexp, 0); break;
-    case PARSE_NT_Fexp: *ast = ast_alloc_node(fexp, 0); break;
-    case PARSE_NT_Xexp: *ast = ast_alloc_node(xexp, 0); break;
-    case PARSE_NT_Aexp: *ast = ast_alloc_node(aexp, 0); break;
-    case PARSE_NT_Texp: *ast = ast_alloc_node(texp, 0); break;
+    case PARSE_NT_Bexp: *ast = alloc_node(bexp, 0); break;
+    case PARSE_NT_Uexp: *ast = alloc_node(uexp, 0); break;
+    case PARSE_NT_Fexp: *ast = alloc_node(fexp, 0); break;
+    case PARSE_NT_Xexp: *ast = alloc_node(xexp, 0); break;
+    case PARSE_NT_Aexp: *ast = alloc_node(aexp, 0); break;
+    case PARSE_NT_Texp: *ast = alloc_node(texp, 0); break;
     case PARSE_NT_Atom: {
         switch (parse_node_tk(expr->children[0])) {
-        case LEX_TK_NAME: *ast = ast_alloc_node(name, 0); break;
-        case LEX_TK_NMBR: *ast = ast_alloc_node(nmbr, 0); break;
-        case LEX_TK_STRL: *ast = ast_alloc_node(strl, 0); break;
+        case LEX_TK_NAME: *ast = alloc_node(name, 0); break;
+        case LEX_TK_NMBR: *ast = alloc_node(nmbr, 0); break;
+        case LEX_TK_STRL: *ast = alloc_node(strl, 0); break;
         default: assert(0), abort();
         }
     } break;
@@ -1098,7 +1098,7 @@ static int validate_expr(const struct parse_node *const expr,
     }
 
     struct ast_node *const ast_node = *ast;
-    ast_set_node(ast_node, AST_AN_VOID, parent, expr);
+    set_node(ast_node, AST_AN_VOID, parent, expr);
     int error;
 
     switch (nt) {
@@ -1324,7 +1324,7 @@ static int validate_decl_or_expr(const struct parse_node *const stmt,
         }
     }
 
-    if (unlikely(!(*ast = ast_alloc_node(decl, 0)))) {
+    if (unlikely(!(*ast = alloc_node(decl, 0)))) {
         return free(names), type_free(type), NOMEM;
     }
 
@@ -1338,7 +1338,7 @@ static int validate_decl_or_expr(const struct parse_node *const stmt,
             ast_destroy(ast_decl->init_expr), error;
     }
 
-    ast_set_node(ast_node, AST_AN_DECL, parent, stmt);
+    set_node(ast_node, AST_AN_DECL, parent, stmt);
     ast_decl->cons = cons;
     ast_decl->expo = expo;
     ast_decl->stat = stat;
@@ -1459,7 +1459,7 @@ int ast_build(const struct parse_node *const unit, struct ast_node **const root)
 {
     const size_t stmt_count = unit->nchildren - 2;
 
-    if (unlikely(!(*root = ast_alloc_node(unit,
+    if (unlikely(!(*root = alloc_node(unit,
         stmt_count * sizeof(struct ast_node *))))) {
 
         return AST_NOMEM;
@@ -1468,7 +1468,7 @@ int ast_build(const struct parse_node *const unit, struct ast_node **const root)
     struct ast_node *const ast_node = *root;
     struct ast_unit *const ast_unit = ast_data(*root, unit);
 
-    ast_set_node(ast_node, AST_AN_UNIT, NULL, unit);
+    set_node(ast_node, AST_AN_UNIT, NULL, unit);
     ast_unit->stmt_count = stmt_count;
 
     assert(ctx_stack.size == 0);

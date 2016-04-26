@@ -1,6 +1,9 @@
 type a: struct(a: int);
 exposed type b: union(c: int);
 
+exposed type e1: enum(red, green, blue): int;
+exposed type e2: enum(red, green, blue);
+
 entry
 {
     pu32(fibonacci(32:u32)), pnl();
