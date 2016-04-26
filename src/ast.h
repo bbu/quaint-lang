@@ -82,7 +82,7 @@ struct ast_func {
     uint8_t expo: 1;
     const struct lex_symbol *name;
     size_t param_count;
-    struct type_name_pair *params;
+    struct type_nt_pair *params;
     struct type *rettype;
     size_t wlab_count;
 

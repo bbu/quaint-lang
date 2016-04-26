@@ -67,7 +67,7 @@ struct scope_builtin_func {
     const struct lex_symbol *const name;
     const struct type *const rettype;
     const size_t param_count;
-    const struct type_name_pair *const params;
+    const struct type_nt_pair *const params;
 };
 
 extern const struct scope_builtin_func scope_builtin_funcs[];

@@ -56,7 +56,7 @@ const struct scope_builtin_const scope_builtin_consts[] = {
 
 static_assert(countof(scope_builtin_consts) == SCOPE_BCON_ID_COUNT, "");
 
-#define PARAMS(...) (const struct type_name_pair []) { \
+#define PARAMS(...) (const struct type_nt_pair []) { \
     __VA_ARGS__ \
 }
 

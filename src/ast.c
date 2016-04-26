@@ -190,8 +190,8 @@ static inline const struct parse_node *count_decl_qualifiers(
 
 static int validate_typespec(const struct parse_node *, struct type *);
 
-static int validate_type_name_pairs(const struct parse_node *,
-    struct type_name_pair **, size_t *);
+static int validate_name_type_pairs(const struct parse_node *,
+    struct type_nt_pair **, size_t *);
 
 static int validate_blok(const struct parse_node *,
     struct ast_node **, const struct ast_node *);
@@ -252,12 +252,12 @@ static int validate_stmt(const struct parse_node *const stmt,
     err; \
 })
 
-static int validate_type_name_pairs(const struct parse_node *expr,
-    struct type_name_pair **const pairs, size_t *const count)
+static int validate_name_type_pairs(const struct parse_node *expr,
+    struct type_nt_pair **const pairs, size_t *const count)
 {
     struct type *type;
     int error;
-    struct type_name_pair *tmp;
+    struct type_nt_pair *tmp;
 
     for (;;) {
         if (!expr_is(PARSE_NT_Bexp, expr)) {
@@ -292,13 +292,13 @@ static int validate_type_name_pairs(const struct parse_node *expr,
             }
 
             if (unlikely(!(tmp = realloc(*pairs, (*count + 1) *
-                sizeof(struct type_name_pair))))) {
+                sizeof(struct type_nt_pair))))) {
 
                 type_free(type), error = NOMEM;
                 goto fail_free;
             }
 
-            (*pairs = tmp)[(*count)++] = (struct type_name_pair) {
+            (*pairs = tmp)[(*count)++] = (struct type_nt_pair) {
                 .type = type,
                 .name = (struct lex_symbol *) left->children[0]->children[0]->token,
             };
@@ -337,13 +337,13 @@ static int validate_type_name_pairs(const struct parse_node *expr,
         }
 
         if (unlikely(!(tmp = realloc(*pairs, (*count + 1) *
-            sizeof(struct type_name_pair))))) {
+            sizeof(struct type_nt_pair))))) {
 
             type_free(type), error = NOMEM;
             goto fail_free;
         }
 
-        (*pairs = tmp)[(*count)++] = (struct type_name_pair) {
+        (*pairs = tmp)[(*count)++] = (struct type_nt_pair) {
             .type = type,
             .name = (struct lex_symbol *) left_left->children[0]->children[0]->token,
         };
@@ -405,6 +405,9 @@ static int validate_typespec(const struct parse_node *const node,
         case TYPE_UNION:
             return INVALID("union must have members", child);
 
+        case TYPE_ENUM:
+            return INVALID("enum must be a top-level type and have values", child);
+
         case TYPE_VOID:
             return resolve_type(type, child);
         }
@@ -457,7 +460,7 @@ static int validate_typespec(const struct parse_node *const node,
         }
 
         case TYPE_FPTR: {
-            return right ? validate_type_name_pairs(right,
+            return right ? validate_name_type_pairs(right,
                 &type->params, &type->param_count) : AST_OK;
         }
 
@@ -471,15 +474,18 @@ static int validate_typespec(const struct parse_node *const node,
                 }
             }
 
-            return validate_type_name_pairs(right,
+            return validate_name_type_pairs(right,
                 &type->members, &type->member_count);
         }
 
+        case TYPE_ENUM:
+            return INVALID("enum must be a top-level type", node);
+
         case TYPE_VOID:
-            return INVALID("bad builtin type", node);
+            return INVALID("bad built-in type", node);
 
         default:
-            return INVALID("builtin type must not have a subtype", node);
+            return INVALID("built-in type must not have a subtype", node);
         }
     }
 
@@ -513,6 +519,10 @@ static int validate_typespec(const struct parse_node *const node,
 
         case TYPE_UNION:
             return INVALID("array of unions must have members", node);
+
+        case TYPE_ENUM:
+            return INVALID("enum must be a top-level decl and have values, "
+                "cannot be an array", node);
 
         case TYPE_VOID:
             return resolve_type(type, array_type->children[0]->children[0]);
@@ -565,12 +575,21 @@ static int validate_typespec(const struct parse_node *const node,
         const struct lex_symbol *const type_name = (struct lex_symbol *)
             pritype->children[0]->children[0]->token;
 
-        if ((type->t = type_match(type_name)) != TYPE_FPTR) {
-            return INVALID("expecting a function pointer", pritype);
+        switch ((type->t = type_match(type_name))) {
+        case TYPE_FPTR:
+            break;
+
+        case TYPE_ENUM:
+            return INVALID(expr_is(PARSE_NT_Aexp, fexp_left) ?
+                "enum must be a top-level type, cannot be an array" :
+                "enum must be a top-level type", node);
+
+        default:
+            return INVALID("expecting an fptr or enum", pritype);
         }
 
         if (fexp_right) {
-            if ((error = validate_type_name_pairs(fexp_right,
+            if ((error = validate_name_type_pairs(fexp_right,
                 &type->params, &type->param_count))) {
 
                 return error;
@@ -702,7 +721,7 @@ static int validate_func(const struct parse_node *const func,
             ast_func->name = (struct lex_symbol *)
                 fexp_left->children[0]->children[0]->token;
 
-            if (fexp_right && (error = validate_type_name_pairs(fexp_right,
+            if (fexp_right && (error = validate_name_type_pairs(fexp_right,
                 &ast_func->params, &ast_func->param_count))) {
 
                 return error;
@@ -731,7 +750,7 @@ static int validate_func(const struct parse_node *const func,
         ast_func->name = (struct lex_symbol *)
             fexp_left->children[0]->children[0]->token;
 
-        if (fexp_right && (error = validate_type_name_pairs(fexp_right,
+        if (fexp_right && (error = validate_name_type_pairs(fexp_right,
             &ast_func->params, &ast_func->param_count))) {
 
             return error;

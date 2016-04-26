@@ -7,6 +7,7 @@
 #include "common.h"
 
 #include <stdlib.h>
+#include <inttypes.h>
 #include <memory.h>
 #include <assert.h>
 
@@ -56,6 +57,7 @@ const struct typedesc {
     td("quaint" , ""       , 8)
     td("struct" , ""       , 0)
     td("union"  , ""       , 0)
+    td("enum"   , ""       , 0)
 };
 
 #undef td
@@ -161,6 +163,7 @@ void type_print(FILE *const out, const struct type *type)
         "quaint",
         "struct",
         "union",
+        "enum",
         "COUNT",
     };
 
@@ -229,6 +232,27 @@ void type_print(FILE *const out, const struct type *type)
         }
         break;
 
+    case TYPE_ENUM:
+        if (type->count == 1) {
+            fprintf(out, YELLOW("%s"), types[type->t]);
+        } else {
+            fprintf(out, YELLOW("%s[%zu]"), types[type->t], type->count);
+        }
+
+        fprintf(out, GREEN("("));
+
+        for (size_t idx = 0; idx < type->value_count; ++idx) {
+            lex_print_symbol(out, CYAN("%.*s"), type->values[idx].name);
+            fprintf(out, GREEN(" = ") CYAN("%" PRIu64), type->values[idx].value);
+
+            if (idx != type->value_count - 1) {
+                fprintf(out, GREEN(", "));
+            }
+        }
+
+        fprintf(out, GREEN("): ") YELLOW("%s"), types[type->t_value]);
+        break;
+
     default:
         if (type->count == 1) {
             fprintf(out, YELLOW("%s"), types[type->t]);
@@ -268,6 +292,10 @@ void type_free(struct type *const type)
         free(type->params);
         type_free(type->rettype);
         break;
+
+    case TYPE_ENUM:
+        free(type->values);
+        break;
     }
 
     free(type);
@@ -290,7 +318,7 @@ int type_copy(struct type *const dst, const struct type *const src)
     case TYPE_STRUCT:
     case TYPE_UNION:
         if (unlikely(!(dst->members = calloc(src->member_count,
-            sizeof(struct type_name_pair))))) {
+            sizeof(struct type_nt_pair))))) {
 
             return TYPE_NOMEM;
         }
@@ -329,7 +357,7 @@ int type_copy(struct type *const dst, const struct type *const src)
         }
 
         if (unlikely(!(dst->params = calloc(src->param_count,
-            sizeof(struct type_name_pair))))) {
+            sizeof(struct type_nt_pair))))) {
 
             return TYPE_NOMEM;
         }
@@ -351,6 +379,9 @@ int type_copy(struct type *const dst, const struct type *const src)
         }
 
         break;
+
+    case TYPE_ENUM:
+        assert(0), abort();
     }
 
     return TYPE_OK;
@@ -403,6 +434,10 @@ bool type_equals(const struct type *const ta, const struct type *const tb)
         } else {
             return false;
         }
+    }
+
+    case TYPE_ENUM: {
+        assert(0), abort();
     }
 
     default: return true;
@@ -1486,7 +1521,7 @@ static const struct type *type_from_expr(const struct ast_node *const node,
                     &scope_builtin_funcs[found->bfun_id];
 
                 src_type.param_count = bfun->param_count;
-                src_type.params = (struct type_name_pair *) bfun->params;
+                src_type.params = (struct type_nt_pair *) bfun->params;
                 src_type.rettype = (struct type *) bfun->rettype;
             } else {
                 const struct ast_func *const func = ast_data(found->func, func);

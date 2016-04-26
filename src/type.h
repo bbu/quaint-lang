@@ -29,6 +29,7 @@ enum {
     TYPE_QUAINT,
     TYPE_STRUCT,
     TYPE_UNION,
+    TYPE_ENUM,
     TYPE_COUNT,
 };
 
@@ -43,9 +44,14 @@ typedef uint8_t type_t;
 
 #define type_alloc calloc(1, sizeof(struct type))
 
-struct type_name_pair {
-    struct type *type;
+struct type_nt_pair {
     const struct lex_symbol *name;
+    struct type *type;
+};
+
+struct type_nv_pair {
+    const struct lex_symbol *name;
+    uint64_t value;
 };
 
 struct type {
@@ -60,15 +66,22 @@ struct type {
         /* t == TYPE_STRUCT || t == TYPE_UNION */
         struct {
             size_t member_count;
-            struct type_name_pair *members;
+            struct type_nt_pair *members;
             size_t *offsets;
         };
 
         /* t == TYPE_FPTR */
         struct {
             size_t param_count;
-            struct type_name_pair *params;
+            struct type_nt_pair *params;
             struct type *rettype;
+        };
+
+        /* t == TYPE_ENUM */
+        struct {
+            size_t value_count;
+            struct type_nv_pair *values;
+            type_t t_value;
         };
     };
 };
@@ -94,7 +107,7 @@ struct type {
     .t = TYPE_STRUCT, \
     .count = (_count), \
     .member_count = (_member_count), \
-    .members = (struct type_name_pair[]) { \
+    .members = (struct type_nt_pair[]) { \
         __VA_ARGS__ \
     }, \
 }
@@ -103,7 +116,7 @@ struct type {
     .t = TYPE_UNION, \
     .count = (_count), \
     .member_count = (_member_count), \
-    .members = (struct type_name_pair[]) { \
+    .members = (struct type_nt_pair[]) { \
         __VA_ARGS__ \
     }, \
 }
@@ -112,7 +125,7 @@ struct type {
     .t = TYPE_FPTR, \
     .count = (_count), \
     .param_count = (_param_count), \
-    .params = (struct type_name_pair[]) { \
+    .params = (struct type_nt_pair[]) { \
         __VA_ARGS__ \
     }, \
     .rettype = (_rettype), \
