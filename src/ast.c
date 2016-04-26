@@ -895,7 +895,8 @@ static int validate_dowh(const struct parse_node *const dowh,
 static int validate_type(const struct parse_node *const stmt,
     struct ast_node **const ast, const struct ast_node *const parent)
 {
-    const struct parse_node *const child = stmt->children[1]->children[0];
+    const uint8_t expo = parse_node_tk(stmt->children[0]) == LEX_TK_EXPO;
+    const struct parse_node *const child = stmt->children[expo + 1]->children[0];
 
     if (parse_node_nt(child) != PARSE_NT_Bexp) {
         return INVALID("bad type statement", child);
@@ -944,6 +945,7 @@ static int validate_type(const struct parse_node *const stmt,
     struct ast_type *const ast_type = ast_data(*ast, type);
 
     ast_set_node(ast_node, AST_AN_TYPE, parent, stmt);
+    ast_type->expo = expo;
     ast_type->name = type_name;
     ast_type->type = root_type;
 
@@ -1358,6 +1360,7 @@ static int validate_stmt(const struct parse_node *const stmt,
 
     if (parse_node_is_tk(stmt->children[0])) {
         switch (parse_node_tk(stmt->children[0])) {
+        case LEX_TK_EXPO:
         case LEX_TK_TYPE: {
             if (ctx != CTX_UNIT) {
                 return INVALID("type statement not in unit context", stmt);
@@ -1716,6 +1719,11 @@ void ast_print(FILE *const out, const struct ast_node *const ast, const int leve
 
     case AST_AN_TYPE: {
         const struct ast_type *const type = ast_data(ast, type);
+
+        if (type->expo) {
+            print(GREEN("exposed "));
+        }
+
         print(YELLOW("type "));
         lex_print_symbol(out, "%.*s: ", type->name);
         type_print(stdout, type->type);

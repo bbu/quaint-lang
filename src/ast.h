@@ -65,6 +65,7 @@ struct ast_unit {
 };
 
 struct ast_type {
+    uint8_t expo: 1;
     const struct lex_symbol *name;
     const struct type *type;
 };

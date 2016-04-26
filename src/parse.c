@@ -75,6 +75,7 @@ static const struct rule grammar[] = {
     r4(Stmt, t(WAIT), n(Expr), t(WNOB), t(SCOL)                                )
     r3(Stmt, t(RETN), n(Expr), t(SCOL)                                         )
     r2(Stmt, t(RETN), t(SCOL)                                                  )
+    r4(Stmt, t(EXPO), t(TYPE), n(Expr), t(SCOL)                                )
     r3(Stmt, t(TYPE), n(Expr), t(SCOL)                                         )
 
     r2(Ctrl, n(Cond), m(Elif)                                                  )
@@ -416,6 +417,10 @@ static inline bool should_shift_pre(const struct rule *const rule,
 
         /* fixme: { } while 0 { } causes a parse error: check whether "do" exists */
         if (ahead == LEX_TK_WHIL) {
+            return true;
+        }
+    } else if (rule->lhs == PARSE_NT_Qual) {
+        if (rule->rhs[RULE_RHS_LAST].tk == LEX_TK_EXPO && ahead == LEX_TK_TYPE) {
             return true;
         }
     }

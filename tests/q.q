@@ -1,3 +1,6 @@
+type a: struct(a: int);
+exposed type b: union(c: int);
+
 entry
 {
     pu32(fibonacci(32:u32)), pnl();
