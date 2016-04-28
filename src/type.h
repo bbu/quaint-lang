@@ -131,6 +131,16 @@ struct type {
     .rettype = (_rettype), \
 }
 
+#define type_enum(_count, _value_count, _t_value, ...) &(struct type) { \
+    .t = TYPE_ENUM, \
+    .count = (_count), \
+    .value_count = (_value_count), \
+    .values = (struct type_nv_pair[]) { \
+        __VA_ARGS__ \
+    }, \
+    .t_value = (_t_value), \
+}
+
 struct type_symtab_entry {
     const struct lex_symbol *name;
     struct type *type;

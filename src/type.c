@@ -381,7 +381,21 @@ int type_copy(struct type *const dst, const struct type *const src)
         break;
 
     case TYPE_ENUM:
-        assert(0), abort();
+        if (unlikely(!(dst->values = calloc(src->value_count,
+            sizeof(struct type_nv_pair))))) {
+
+            return TYPE_NOMEM;
+        }
+
+        dst->value_count = src->value_count;
+        dst->t_value = src->t_value;
+
+        for (size_t idx = 0; idx < src->value_count; ++idx) {
+            dst->values[idx].name = src->values[idx].name;
+            dst->values[idx].value = src->values[idx].value;
+        }
+
+        break;
     }
 
     return TYPE_OK;
@@ -437,7 +451,21 @@ bool type_equals(const struct type *const ta, const struct type *const tb)
     }
 
     case TYPE_ENUM: {
-        assert(0), abort();
+        if (ta->value_count != tb->value_count || ta->t_value != tb->t_value) {
+            return false;
+        }
+
+        for (size_t idx = 0; idx < ta->value_count; ++idx) {
+            if (!lex_symbols_equal(ta->values[idx].name, tb->values[idx].name)) {
+                return false;
+            }
+
+            if (ta->values[idx].value != tb->values[idx].value) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     default: return true;
@@ -454,7 +482,8 @@ int type_quantify(struct type *const type)
         return TYPE_OK;
     }
 
-    const size_t size = typedescs[type->t - 1].size;
+    const size_t size =
+        typedescs[(type->t != TYPE_ENUM ? type->t : type->t_value) - 1].size;
 
     if (size) {
         type->size = size;
