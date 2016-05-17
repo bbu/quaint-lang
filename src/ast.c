@@ -8,6 +8,7 @@
 #include "common.h"
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include <assert.h>
 
 #define NOMEM \
@@ -89,14 +90,14 @@ static uint64_t nmbr_to_uint(const struct parse_node *const nmbr)
     return result;
 }
 
-static inline int expr_is_atom(const lex_tk_t tk,
+static inline bool expr_is_atom(const lex_tk_t tk,
     const struct parse_node *const expr)
 {
     return parse_node_nt(expr->children[0]) == PARSE_NT_Atom &&
         parse_node_tk(expr->children[0]->children[0]) == tk;
 }
 
-static inline int expr_is(const parse_nt_t nt, const struct parse_node *const expr)
+static inline bool expr_is(const parse_nt_t nt, const struct parse_node *const expr)
 {
     return parse_node_nt(expr->children[0]) == nt;
 }
@@ -189,6 +190,7 @@ static inline const struct parse_node *count_decl_qualifiers(
 }
 
 static int validate_typespec(const struct parse_node *, struct type *);
+static int validate_typespec_enum(const struct parse_node *, struct type *);
 
 static int validate_name_type_pairs(const struct parse_node *,
     struct type_nt_pair **, size_t *);
@@ -374,6 +376,43 @@ fail_free:
     return error;
 }
 
+static bool typespec_appears_enum(const struct parse_node *const node)
+{
+    switch (node->nt) {
+    case PARSE_NT_Expr:
+        return typespec_appears_enum(node->children[0]);
+
+    case PARSE_NT_Fexp: {
+        const struct parse_node *const left = node->children[0];
+
+        if (expr_is_atom(LEX_TK_NAME, left)) {
+            const struct lex_symbol *const maybe_enum =
+                (const struct lex_symbol *) left->children[0]->children[0]->token;
+
+            if (lex_symbols_equal(lex_sym("enum"), maybe_enum)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    case PARSE_NT_Bexp: {
+        const struct parse_node *const left = node->children[0];
+        const struct parse_node *const op = node->children[1];
+
+        if (parse_node_tk(op) != LEX_TK_COLN) {
+            return false;
+        }
+
+        return typespec_appears_enum(left);
+    }
+
+    default:
+        return false;
+    }
+}
+
 static int validate_typespec(const struct parse_node *const node,
     struct type *const type)
 {
@@ -479,7 +518,9 @@ static int validate_typespec(const struct parse_node *const node,
         }
 
         case TYPE_ENUM:
-            return INVALID("enum must be a top-level type", node);
+            return INVALID(expr_is(PARSE_NT_Aexp, left) ?
+                "enum must be a top-level type, cannot be an array" :
+                "enum must be a top-level type", node);
 
         case TYPE_VOID:
             return INVALID("bad built-in type", node);
@@ -610,6 +651,14 @@ static int validate_typespec(const struct parse_node *const node,
     default:
         return INVALID("bad type specifier", node);
     }
+}
+
+static int validate_typespec_enum(const struct parse_node *const node,
+    struct type *const type)
+{
+    (void) node;
+    (void) type;
+    return AST_OK;
 }
 
 static int validate_wlab(const struct parse_node *const stmt,
@@ -915,18 +964,22 @@ static int validate_type(const struct parse_node *const stmt,
     struct ast_node **const ast, const struct ast_node *const parent)
 {
     const uint8_t expo = parse_node_tk(stmt->children[0]) == LEX_TK_EXPO;
-    const struct parse_node *const child = stmt->children[expo + 1]->children[0];
+    const struct parse_node *const bexp = stmt->children[expo + 1]->children[0];
 
-    if (parse_node_nt(child) != PARSE_NT_Bexp) {
-        return INVALID("bad type statement", child);
+    if (parse_node_nt(bexp) != PARSE_NT_Bexp) {
+        return INVALID("bad type statement", bexp);
     }
 
-    if (!expr_is_atom(LEX_TK_NAME, child->children[0])) {
-        return INVALID("bad type name", child->children[0]);
+    const struct parse_node *const typename = bexp->children[0];
+    const struct parse_node *const maybe_colon = bexp->children[1];
+    const struct parse_node *const typespec = bexp->children[2];
+
+    if (!expr_is_atom(LEX_TK_NAME, typename)) {
+        return INVALID("bad type name", typename);
     }
 
-    if (parse_node_tk(child->children[1]) != LEX_TK_COLN) {
-        return INVALID("expecting a colon after the type name", child);
+    if (parse_node_tk(maybe_colon) != LEX_TK_COLN) {
+        return INVALID("expecting a colon after the type name", bexp);
     }
 
     if (unlikely(!(*ast = alloc_node(type, 0)))) {
@@ -939,25 +992,23 @@ static int validate_type(const struct parse_node *const stmt,
         return NOMEM;
     }
 
-    int error;
+    int error = (typespec_appears_enum(typespec) ?
+        validate_typespec_enum : validate_typespec)(typespec, root_type);
 
-    if ((error = validate_typespec(child->children[2], root_type))) {
+    if (error) {
         return type_free(root_type), error;
     }
 
-    const struct lex_symbol *const type_name = (const struct lex_symbol *)
-        child->children[0]->children[0]->children[0]->token;
-
     const struct type_symtab_entry entry = {
         .type = root_type,
-        .name = type_name,
+        .name = (const struct lex_symbol *) typename->children[0]->children[0]->token,
     };
 
     if ((error = type_symtab_insert(&entry))) {
         type_free(root_type);
 
         return unlikely(error < 0) ? NOMEM :
-            INVALID("redefinition of type", child->children[0]);
+            INVALID("redefinition of type", bexp->children[0]);
     }
 
     struct ast_node *const ast_node = *ast;
@@ -965,8 +1016,8 @@ static int validate_type(const struct parse_node *const stmt,
 
     set_node(ast_node, AST_AN_TYPE, parent, stmt);
     ast_type->expo = expo;
-    ast_type->name = type_name;
-    ast_type->type = root_type;
+    ast_type->name = entry.name;
+    ast_type->type = entry.type;
 
     return AST_OK;
 }
