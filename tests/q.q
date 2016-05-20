@@ -1,7 +1,7 @@
 type a: struct(a: int);
 exposed type b: union(c: enum(red, green, blue): int);
 
-exposed type e1: enum(red, green, blue): int;
+exposed type e1: enum(red, green, blue): u64;
 exposed type e2: enum(red, green, blue);
 // math::e1::green, e1::green
 

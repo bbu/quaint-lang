@@ -656,8 +656,41 @@ static int validate_typespec(const struct parse_node *const node,
 static int validate_typespec_enum(const struct parse_node *const node,
     struct type *const type)
 {
-    (void) node;
-    (void) type;
+    type_t t_enum;
+    const struct parse_node *enum_fexp;
+
+    if (expr_is(PARSE_NT_Bexp, node)) {
+        struct type *const explicit_type = type_alloc;
+
+        if (unlikely(!explicit_type)) {
+            return NOMEM;
+        }
+
+        const struct parse_node *const typespec = node->children[0]->children[2];
+        const int error = validate_typespec(typespec, explicit_type);
+        t_enum = explicit_type->t;
+        type_free(explicit_type);
+
+        if (error) {
+            return error;
+        }
+
+        if (!type_is_integral(t_enum) || !type_is_unsigned(t_enum)) {
+            return INVALID("enum type must be integral and unsigned", typespec);
+        }
+
+        enum_fexp = node->children[0]->children[0];
+    } else {
+        t_enum = TYPE_VOID;
+        enum_fexp = node;
+    }
+
+    type->t = TYPE_ENUM;
+    type->count = 1;
+    type->value_count = 0;
+    type->values = NULL;
+    type->t_value = t_enum;
+
     return AST_OK;
 }
 
