@@ -254,104 +254,65 @@ static int validate_stmt(const struct parse_node *const stmt,
     err; \
 })
 
-static int validate_name_type_pairs(const struct parse_node *expr,
+static int validate_name_type_pairs(const struct parse_node *list,
     struct type_nt_pair **const pairs, size_t *const count)
 {
-    struct type *type;
     int error;
-    struct type_nt_pair *tmp;
 
-    for (;;) {
-        if (!expr_is(PARSE_NT_Bexp, expr)) {
-            error = INVALID("bad name-type pair", expr);
+    do {
+        const bool has_comma = expr_is(PARSE_NT_Bexp, list) &&
+            parse_node_tk(list->children[0]->children[1]) == LEX_TK_COMA;
+
+        const struct parse_node *const term = has_comma ?
+            list->children[0]->children[0] : list;
+
+        list = has_comma ? list->children[0]->children[2] : NULL;
+
+        if (!expr_is(PARSE_NT_Bexp, term)) {
+            error = INVALID("bad name-type pair", term);
             goto fail_free;
         }
 
-        const struct parse_node *const bexp = expr->children[0];
+        const struct parse_node *const bexp = term->children[0];
         const struct parse_node *const left = bexp->children[0];
         const struct parse_node *const op = bexp->children[1];
         const struct parse_node *const right = bexp->children[2];
 
-        if (parse_node_tk(op) != LEX_TK_COMA) {
-            if (parse_node_tk(op) != LEX_TK_COLN) {
-                error = INVALID("expecting a colon", op);
-                goto fail_free;
-            }
-
-            if (!expr_is_atom(LEX_TK_NAME, left)) {
-                error = INVALID("expecting a name", left);
-                goto fail_free;
-            }
-
-            if (unlikely(!(type = type_alloc))) {
-                error = NOMEM;
-                goto fail_free;
-            }
-
-            if ((error = validate_typespec(right, type))) {
-                type_free(type);
-                goto fail_free;
-            }
-
-            if (unlikely(!(tmp = realloc(*pairs, (*count + 1) *
-                sizeof(struct type_nt_pair))))) {
-
-                type_free(type), error = NOMEM;
-                goto fail_free;
-            }
-
-            (*pairs = tmp)[(*count)++] = (struct type_nt_pair) {
-                .type = type,
-                .name = (struct lex_symbol *) left->children[0]->children[0]->token,
-            };
-
-            break;
-        }
-
-        if (!expr_is(PARSE_NT_Bexp, left)) {
-            error = INVALID("bad name-type pair", left);
+        if (parse_node_tk(op) != LEX_TK_COLN) {
+            error = INVALID("expecting a colon in name-type pair", bexp);
             goto fail_free;
         }
 
-        const struct parse_node *const left_bexp = left->children[0];
-        const struct parse_node *const left_left = left_bexp->children[0];
-        const struct parse_node *const left_op = left_bexp->children[1];
-        const struct parse_node *const left_right = left_bexp->children[2];
-
-        if (parse_node_tk(left_op) != LEX_TK_COLN) {
-            error = INVALID("expecting a colon", left_op);
+        if (!expr_is_atom(LEX_TK_NAME, left)) {
+            error = INVALID("expecting a name", left);
             goto fail_free;
         }
 
-        if (!expr_is_atom(LEX_TK_NAME, left_left)) {
-            error = INVALID("expecting a name", left_left);
-            goto fail_free;
-        }
+        struct type *const type = type_alloc;
 
-        if (unlikely(!(type = type_alloc))) {
+        if (unlikely(!type)) {
             error = NOMEM;
             goto fail_free;
         }
 
-        if ((error = validate_typespec(left_right, type))) {
+        if ((error = validate_typespec(right, type))) {
             type_free(type);
             goto fail_free;
         }
 
-        if (unlikely(!(tmp = realloc(*pairs, (*count + 1) *
-            sizeof(struct type_nt_pair))))) {
+        struct type_nt_pair *const tmp = realloc(*pairs,
+            (*count + 1) * sizeof(struct type_nt_pair));
 
+        if (unlikely(!tmp)) {
             type_free(type), error = NOMEM;
             goto fail_free;
         }
 
         (*pairs = tmp)[(*count)++] = (struct type_nt_pair) {
+            .name = (struct lex_symbol *) left->children[0]->children[0]->token,
             .type = type,
-            .name = (struct lex_symbol *) left_left->children[0]->children[0]->token,
         };
-
-        expr = right;
-    }
+    } while (list);
 
     for (size_t i = 0; i < *count; ++i) {
         for (size_t j = i + 1; j < *count; ++j) {
@@ -679,16 +640,107 @@ static int validate_typespec_enum(const struct parse_node *const node,
             return INVALID("enum type must be integral and unsigned", typespec);
         }
 
-        enum_fexp = node->children[0]->children[0];
+        enum_fexp = node->children[0]->children[0]->children[0];
     } else {
         t_enum = TYPE_VOID;
-        enum_fexp = node;
+        enum_fexp = node->children[0];
+    }
+
+    const struct parse_node *value_list = enum_fexp->nchildren == 4 ?
+        enum_fexp->children[2] : NULL;
+
+    if (!value_list) {
+        return INVALID("an enum must have values", enum_fexp);
+    }
+
+    struct type_nv_pair *values = NULL;
+    type->value_count = 0;
+
+    do {
+        const bool has_comma = expr_is(PARSE_NT_Bexp, value_list) &&
+            parse_node_tk(value_list->children[0]->children[1]) == LEX_TK_COMA;
+
+        const struct parse_node *const value = has_comma ?
+            value_list->children[0]->children[0] : value_list;
+
+        value_list = has_comma ? value_list->children[0]->children[2] : NULL;
+
+        if (!expr_is_atom(LEX_TK_NAME, value)) {
+            return free(values), INVALID("bad enum value", value);
+        }
+
+        type->value_count++;
+
+        struct type_nv_pair *const tmp = realloc(values,
+            sizeof(struct type_nv_pair) * type->value_count);
+
+        if (unlikely(!tmp)) {
+            return free(values), NOMEM;
+        }
+
+        (values = tmp)[type->value_count - 1] = (struct type_nv_pair) {
+            .name = (const struct lex_symbol *) value->children[0]->children[0]->token,
+            .value = type->value_count - 1,
+        };
+    } while (value_list);
+
+    for (size_t i = 0; i < type->value_count; ++i) {
+        for (size_t j = i + 1; j < type->value_count; ++j) {
+            if (unlikely(lex_symbols_equal(values[i].name, values[j].name))) {
+                const struct lex_token *const token = (struct lex_token *)
+                    values[j].name;
+
+                return free(values), INVALID_TK("duplicate value in enum", token);
+            }
+        }
+    }
+
+    const uintmax_t max_value = type->value_count - 1;
+
+    if (t_enum == TYPE_VOID) {
+        if (max_value <= 0xFF) {
+            t_enum = TYPE_U8;
+        } else if (max_value <= 0xFFFF) {
+            t_enum = TYPE_U16;
+        } else if (max_value <= 0xFFFFFFFF) {
+            t_enum = TYPE_U32;
+        } else {
+            t_enum = TYPE_U64;
+        }
+    } else {
+        uintmax_t boundary;
+
+        switch (t_enum) {
+        case TYPE_U8:
+            boundary = 0xFF;
+            break;
+
+        case TYPE_U16:
+            boundary = 0xFFFF;
+            break;
+
+        case TYPE_U32:
+            boundary = 0xFFFFFFFF;
+            break;
+
+        case TYPE_U64:
+        case TYPE_USIZE:
+        case TYPE_UPTR:
+            boundary = 0xFFFFFFFFFFFFFFFF;
+            break;
+
+        default: assert(0), abort();
+        }
+
+        if (max_value > boundary) {
+            free(values);
+            return INVALID("enum values do not fit into the specified type", node);
+        }
     }
 
     type->t = TYPE_ENUM;
     type->count = 1;
-    type->value_count = 0;
-    type->values = NULL;
+    type->values = values;
     type->t_value = t_enum;
 
     return AST_OK;
