@@ -118,7 +118,7 @@ More examples:
 arr: int[5]; /* arr is an array of 5 ints */
 p: ptr(int); /* p is a pointer to an int */
 p: ptr[3](int); /* p is an array of 3 pointers to int */
-p: ptr[3](int[5]) /* p is an array of 3 pointers to array of 5 ints */
+p: ptr[3](int[5]); /* p is an array of 3 pointers to array of 5 ints */
 
 /* fp is a function pointer to a function taking a byte, returning an int */
 fp: fptr(b: byte): int;
@@ -216,6 +216,7 @@ from functions.
 | quaint      |            |            | ✓          | 8          | 8          |
 | struct      |            |            |            | -          | -          |
 | union       |            |            |            | -          | -          |
+| enum        |            |            | ✓          | -          | -          |
 
 The types `usize` and `ssize` are preferred for pointer arithmetic (analogous
 to `size_t` and `ssize_t`).
