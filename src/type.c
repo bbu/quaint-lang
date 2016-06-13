@@ -35,7 +35,7 @@
     .size  = s,             \
 },
 
-const struct typedesc {
+static const struct typedesc {
     const char name[8], alias[8];
     const uint8_t nlen: 3, alen: 3, size: 4;
 } typedescs[TYPE_COUNT] = {
@@ -51,20 +51,24 @@ const struct typedesc {
     td("ssize"  , ""       , 8)
     td("uptr"   , ""       , 8)
     td("iptr"   , ""       , 8)
+    td("enum"   , ""       , 0)
     td("ptr"    , ""       , 8)
     td("vptr"   , ""       , 8)
     td("fptr"   , ""       , 8)
     td("quaint" , ""       , 8)
     td("struct" , ""       , 0)
     td("union"  , ""       , 0)
-    td("enum"   , ""       , 0)
 };
 
 #undef td
 
 static struct {
     size_t size, allocated;
-    struct type_symtab_entry *entries;
+
+    struct {
+        const struct lex_symbol *name;
+        const struct type *type;
+    } *entries;
 } symtab;
 
 static struct type
@@ -76,18 +80,18 @@ static struct type
 
 static const struct scope *unit_scope;
 
-type_t type_match(const struct lex_symbol *const sym)
+type_t type_match(const struct lex_symbol *const symbol)
 {
-    const size_t len = (size_t) (sym->end - sym->beg);
+    const size_t len = (size_t) (symbol->end - symbol->beg);
 
     for (type_t type = TYPE_VOID + 1; type < TYPE_COUNT; ++type) {
         const struct typedesc *const td = &typedescs[type - 1];
 
-        if (len == td->nlen && !memcmp(td->name, sym->beg, len)) {
+        if (len == td->nlen && !memcmp(td->name, symbol->beg, len)) {
             return type;
         }
 
-        if (len == td->alen && !memcmp(td->alias, sym->beg, len)) {
+        if (len == td->alen && !memcmp(td->alias, symbol->beg, len)) {
             return type;
         }
     }
@@ -95,28 +99,29 @@ type_t type_match(const struct lex_symbol *const sym)
     return TYPE_VOID;
 }
 
-struct type_symtab_entry *type_symtab_find_entry(const struct lex_symbol *symbol)
+const struct type *type_symtab_find(const struct lex_symbol *const symbol)
 {
     for (size_t entry_idx = 0; entry_idx < symtab.size; ++entry_idx) {
         if (lex_symbols_equal(symtab.entries[entry_idx].name, symbol)) {
-            return &symtab.entries[entry_idx];
+            return symtab.entries[entry_idx].type;
         }
     }
 
     return NULL;
 }
 
-int type_symtab_insert(const struct type_symtab_entry *const entry)
+int type_symtab_insert(const struct lex_symbol *const symbol,
+    const struct type *const type)
 {
-    if (unlikely(type_symtab_find_entry(entry->name))) {
+    if (unlikely(type_symtab_find(symbol))) {
         return 1;
     }
 
     if (symtab.size >= symtab.allocated) {
         symtab.allocated = (symtab.allocated ?: 1) * 8;
 
-        struct type_symtab_entry *const tmp = realloc(symtab.entries,
-            symtab.allocated * sizeof(struct type_symtab_entry));
+        void *const tmp = realloc(symtab.entries,
+            symtab.allocated * sizeof(symtab.entries[0]));
 
         if (unlikely(!tmp)) {
             return type_symtab_clear(), -1;
@@ -125,7 +130,8 @@ int type_symtab_insert(const struct type_symtab_entry *const entry)
         symtab.entries = tmp;
     }
 
-    symtab.entries[symtab.size++] = *entry;
+    symtab.entries[symtab.size].name = symbol;
+    symtab.entries[symtab.size++].type = type;
     return 0;
 }
 
@@ -157,13 +163,13 @@ void type_print(FILE *const out, const struct type *type)
         "ssize",
         "uptr",
         "iptr",
+        "enum",
         "ptr",
         "vptr",
         "fptr",
         "quaint",
         "struct",
         "union",
-        "enum",
         "COUNT",
     };
 
@@ -262,7 +268,7 @@ void type_print(FILE *const out, const struct type *type)
     }
 }
 
-void type_free(struct type *const type)
+void type_free(const struct type *const type)
 {
     if (!type) {
         return;
@@ -298,7 +304,7 @@ void type_free(struct type *const type)
         break;
     }
 
-    free(type);
+    free((struct type *) type);
 }
 
 int type_copy(struct type *const dst, const struct type *const src)
@@ -663,10 +669,15 @@ static const struct type *type_from_bexp(const struct ast_node *const node,
 {
     struct ast_bexp *const bexp = ast_data(node, bexp);
     assert(bexp->type == NULL);
+
+    if (bexp->op == LEX_TK_SCOP) {
+        return INVALID_NULL("operator not implemented", node);
+    }
+
     const struct type *const lhs_type = type_from_expr(bexp->lhs, scope);
     const struct type *rhs_type = NULL;
 
-    const int go_right =
+    const bool go_right =
         bexp->op != LEX_TK_CAST && bexp->op != LEX_TK_COLN &&
         bexp->op != LEX_TK_MEMB && bexp->op != LEX_TK_AROW &&
         bexp->op != LEX_TK_ATSI;
@@ -735,7 +746,7 @@ static const struct type *type_from_bexp(const struct ast_node *const node,
             return INVALID_NULL("non-integral right operand", node);
         }
 
-        if (typedescs[tl - 1].size != typedescs[tr - 1].size) {
+        if (lhs_type->size != rhs_type->size) {
             return INVALID_NULL("differing type sizes", node);
         }
 
@@ -784,7 +795,7 @@ static const struct type *type_from_bexp(const struct ast_node *const node,
             return INVALID_NULL("signed right operand", node);
         }
 
-        if (typedescs[tl - 1].size != typedescs[tr - 1].size) {
+        if (lhs_type->size != rhs_type->size) {
             return INVALID_NULL("differing type sizes", node);
         }
 
@@ -798,7 +809,7 @@ static const struct type *type_from_bexp(const struct ast_node *const node,
     } break;
 
     case LEX_TK_SCOP:
-        return INVALID_NULL("operator not implemented", node);
+        assert(0), abort();
 
     case LEX_TK_ATSI: {
         if (lhs_type->count != 1) {
@@ -947,7 +958,7 @@ create_type:
             return INVALID_NULL("non-integral right operand", node);
         }
 
-        if (typedescs[tl - 1].size != typedescs[tr - 1].size) {
+        if (lhs_type->size != rhs_type->size) {
             return INVALID_NULL("differing type sizes", node);
         }
 
@@ -995,7 +1006,7 @@ create_type:
             return INVALID_NULL("non-integral right operand", node);
         }
 
-        if (typedescs[tl - 1].size != typedescs[tr - 1].size) {
+        if (lhs_type->size != rhs_type->size) {
             return INVALID_NULL("differing type sizes", node);
         }
 
@@ -1040,7 +1051,7 @@ create_type:
             return INVALID_NULL("signed right operand", node);
         }
 
-        if (typedescs[tl - 1].size != typedescs[tr - 1].size) {
+        if (lhs_type->size != rhs_type->size) {
             return INVALID_NULL("differing type sizes", node);
         }
 

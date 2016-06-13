@@ -1951,7 +1951,7 @@ out:
     return error;
 }
 
-void codegen_obj_destroy(struct codegen_obj *const obj)
+void codegen_obj_destroy(const struct codegen_obj *const obj)
 {
     if (obj) {
         free(obj->strings.mem);

@@ -105,16 +105,16 @@ static inline bool expr_is(const parse_nt_t nt, const struct parse_node *const e
 static int resolve_type(struct type *unresolved,
     const struct parse_node *const name)
 {
-    const struct type_symtab_entry *const entry =
-        type_symtab_find_entry((struct lex_symbol *) name->token);
+    const struct type *const found_type =
+        type_symtab_find((struct lex_symbol *) name->token);
 
-    if (unlikely(!entry)) {
+    if (unlikely(!found_type)) {
         return INVALID("reference to undefined type", name);
     }
 
     const size_t count = unresolved->count;
 
-    return unlikely(type_copy(unresolved, entry->type)) ?
+    return unlikely(type_copy(unresolved, found_type)) ?
         NOMEM : (unresolved->count = count, AST_OK);
 }
 
@@ -1071,26 +1071,24 @@ static int validate_type(const struct parse_node *const stmt,
         return NOMEM;
     }
 
-    struct type *const root_type = type_alloc;
+    struct type *const type = type_alloc;
 
-    if (unlikely(!root_type)) {
+    if (unlikely(!type)) {
         return NOMEM;
     }
 
     int error = (typespec_appears_enum(typespec) ?
-        validate_typespec_enum : validate_typespec)(typespec, root_type);
+        validate_typespec_enum : validate_typespec)(typespec, type);
 
     if (error) {
-        return type_free(root_type), error;
+        return type_free(type), error;
     }
 
-    const struct type_symtab_entry entry = {
-        .type = root_type,
-        .name = (const struct lex_symbol *) typename->children[0]->children[0]->token,
-    };
+    const struct lex_symbol *const name =
+        (const struct lex_symbol *) typename->children[0]->children[0]->token;
 
-    if ((error = type_symtab_insert(&entry))) {
-        type_free(root_type);
+    if ((error = type_symtab_insert(name, type))) {
+        type_free(type);
 
         return unlikely(error < 0) ? NOMEM :
             INVALID("redefinition of type", bexp->children[0]);
@@ -1101,8 +1099,8 @@ static int validate_type(const struct parse_node *const stmt,
 
     set_node(ast_node, AST_AN_TYPE, parent, stmt);
     ast_type->expo = expo;
-    ast_type->name = entry.name;
-    ast_type->type = entry.type;
+    ast_type->name = name;
+    ast_type->type = type;
 
     return AST_OK;
 }
@@ -1637,7 +1635,7 @@ int ast_build(const struct parse_node *const unit, struct ast_node **const root)
     return error;
 }
 
-void ast_destroy(struct ast_node *const ast)
+void ast_destroy(const struct ast_node *const ast)
 {
     if (!ast) {
         return;
@@ -1814,7 +1812,7 @@ void ast_destroy(struct ast_node *const ast)
     default: assert(0), abort();
     }
 
-    free(ast);
+    free((struct ast_node *) ast);
 }
 
 void ast_print(FILE *const out, const struct ast_node *const ast, const int level)

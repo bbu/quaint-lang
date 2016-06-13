@@ -23,20 +23,20 @@ enum {
     TYPE_SSIZE,
     TYPE_UPTR,
     TYPE_IPTR,
+    TYPE_ENUM,
     TYPE_PTR,
     TYPE_VPTR,
     TYPE_FPTR,
     TYPE_QUAINT,
     TYPE_STRUCT,
     TYPE_UNION,
-    TYPE_ENUM,
     TYPE_COUNT,
 };
 
 static_assert(TYPE_COUNT - 1 <= UINT8_MAX, "");
 typedef uint8_t type_t;
 
-#define type_is_integral(t) ((t) >= TYPE_U8 && (t) <= TYPE_IPTR)
+#define type_is_integral(t) ((t) >= TYPE_U8 && (t) <= TYPE_ENUM)
 #define type_is_signed(t) ((t) % 2 == 0)
 #define type_is_unsigned(t) ((t) % 2)
 #define type_is_ptr(t) ((t) == TYPE_PTR || (t) == TYPE_VPTR || (t) == TYPE_FPTR)
@@ -141,17 +141,12 @@ struct type {
     .t_value = (_t_value), \
 }
 
-struct type_symtab_entry {
-    const struct lex_symbol *name;
-    struct type *type;
-};
-
 type_t type_match(const struct lex_symbol *);
-struct type_symtab_entry *type_symtab_find_entry(const struct lex_symbol *);
-int type_symtab_insert(const struct type_symtab_entry *);
+const struct type *type_symtab_find(const struct lex_symbol *);
+int type_symtab_insert(const struct lex_symbol *, const struct type *);
 void type_symtab_clear(void);
 void type_print(FILE *, const struct type *);
-void type_free(struct type *);
+void type_free(const struct type *);
 int type_copy(struct type *, const struct type *);
 bool type_equals(const struct type *, const struct type *);
 int type_quantify(struct type *);

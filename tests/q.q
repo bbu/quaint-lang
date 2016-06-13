@@ -1,7 +1,7 @@
 type a: struct(a: int, b: byte, c: long, d: u8);
-exposed type b: union(c: enum(red, green, blue): int);
+exposed type b: union(c: int);
 
-exposed type e1: enum(red, green, blue): byte;
+exposed type e1: enum(red, green, blue): u32;
 exposed type e2: enum(abc, def, dd);
 // math::e1::green, e1::green
 
@@ -11,7 +11,9 @@ entry
     fib1: quaint(u32) = ~fibonacci(32 as u32);
     fib2: quaint(u32) = ~fibonacci(30 as u32);
     iter: u32 = 0:u32;
-
+    aa, bb: e1;
+    aa = bb;
+    aa::red::22::44;
     ps("Test: "), pu8(123), pnl();
 
     do {

@@ -370,13 +370,8 @@ static inline bool should_shift_pre(const struct rule *const rule,
             }
 
             if (p1 == p2) {
-                if (lex_tk_is_assn(op)) {
-                    return true;
-                }
-
-                if (op == LEX_TK_COLN || op == LEX_TK_COMA) {
-                    return true;
-                }
+                return lex_tk_is_assn(op) ||
+                    op == LEX_TK_COLN || op == LEX_TK_COMA || op == LEX_TK_SCOP;
             }
         } else if (ahead == LEX_TK_LPAR || ahead == LEX_TK_LBRA ||
             ahead == LEX_TK_INCR || ahead == LEX_TK_DECR) {
@@ -590,12 +585,12 @@ static void diagnose_error(void)
 struct parse_node parse(const struct lex_token *const tokens, const size_t ntokens)
 {
     static const struct lex_token
-        reject       = { .tk = PARSE_REJECT },
-        nomem        = { .tk = PARSE_NOMEM  };
+        reject     = { .tk = PARSE_REJECT },
+        nomem      = { .tk = PARSE_NOMEM  };
 
     static const struct parse_node
-        err_reject   = { .nchildren = 0, .token = &reject },
-        err_nomem    = { .nchildren = 0, .token = &nomem  };
+        err_reject = { .nchildren = 0, .token = &reject },
+        err_nomem  = { .nchildren = 0, .token = &nomem  };
 
     #define SHIFT_OR_NOMEM(t) \
         if (unlikely(shift(t))) { \

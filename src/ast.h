@@ -224,5 +224,5 @@ enum {
     AST_INVALID,
 };
 
-void ast_destroy(struct ast_node *);
+void ast_destroy(const struct ast_node *);
 void ast_print(FILE *, const struct ast_node *, int);

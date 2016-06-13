@@ -202,7 +202,7 @@ struct codegen_obj {
 };
 
 int codegen_obj_create(const struct ast_node *, struct codegen_obj *);
-void codegen_obj_destroy(struct codegen_obj *);
+void codegen_obj_destroy(const struct codegen_obj *);
 
 enum {
     CODEGEN_OK = 0,
