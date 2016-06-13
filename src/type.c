@@ -661,6 +661,104 @@ static bool expr_is_lvalue(const struct ast_node *const node)
     return INVALID("lvalue is required", node), false;
 }
 
+static const struct type *type_from_name(const struct ast_node *const node,
+    const struct scope *const scope)
+{
+    struct ast_name *const name = ast_data(node, name);
+    assert(name->type == NULL);
+
+    const struct scope_obj *const found =
+        scope_find_object(scope, (const struct lex_symbol *) node->ltok);
+
+    if (!found) {
+        return INVALID_NULL("undefined symbol", node);
+    }
+
+    name->scoped = found;
+
+    if (unlikely(!(name->type = type_alloc))) {
+        return NOMEM_NULL;
+    }
+
+    switch (found->obj) {
+    case SCOPE_OBJ_BCON:
+    case SCOPE_OBJ_PARM:
+    case SCOPE_OBJ_GVAR:
+    case SCOPE_OBJ_AVAR: {
+        const struct type *src_type;
+
+        if (found->obj == SCOPE_OBJ_GVAR || found->obj == SCOPE_OBJ_AVAR) {
+            src_type = ast_data(found->decl, decl)->type;
+        } else if (found->obj == SCOPE_OBJ_PARM) {
+            src_type = found->type;
+        } else {
+            src_type = scope_builtin_consts[found->bcon_id].type;
+        }
+
+        if (unlikely(type_copy(name->type, src_type))) {
+            return type_free(name->type), name->type = NULL, NOMEM_NULL;
+        }
+    } break;
+
+    case SCOPE_OBJ_BFUN:
+    case SCOPE_OBJ_FUNC: {
+        struct type src_type = (struct type) {
+            .t = TYPE_FPTR,
+            .count = 1,
+        };
+
+        if (found->obj == SCOPE_OBJ_BFUN) {
+            const struct scope_builtin_func *const bfun =
+                &scope_builtin_funcs[found->bfun_id];
+
+            src_type.param_count = bfun->param_count;
+            src_type.params = (struct type_nt_pair *) bfun->params;
+            src_type.rettype = (struct type *) bfun->rettype;
+        } else {
+            const struct ast_func *const func = ast_data(found->func, func);
+            src_type.param_count = func->param_count;
+            src_type.params = func->params;
+            src_type.rettype = func->rettype;
+        }
+
+        if (unlikely(type_copy(name->type, &src_type))) {
+            return type_free(name->type), name->type = NULL, NOMEM_NULL;
+        }
+    } break;
+
+    default: assert(0), abort();
+    }
+
+    return name->type;
+}
+
+static const struct type *type_from_scoped_name(const struct ast_node *const node,
+    const struct scope *const scope)
+{
+    struct ast_bexp *const bexp = ast_data(node, bexp);
+    (void) bexp;
+    (void) scope;
+    assert(bexp->op == LEX_TK_SCOP);
+
+    const struct ast_node *list = node;
+
+    do {
+        const bool not_last =
+            list->an == AST_AN_BEXP && ast_data(list, bexp)->op == LEX_TK_SCOP;
+
+        const struct ast_node *const name = not_last ? ast_data(list, bexp)->lhs : list;
+        list = not_last ? ast_data(list, bexp)->rhs : NULL;
+
+        if (name->an != AST_AN_NAME) {
+            return INVALID_NULL("only a name can appear in a scope operator", name);
+        }
+
+        //lex_print_symbol(stdout, "%.*s\n", (const struct lex_symbol *) name->ltok);
+    } while (list);
+
+    return INVALID_NULL("operator not implemented", node);
+}
+
 static const struct type *type_from_expr(const struct ast_node *,
     const struct scope *);
 
@@ -671,7 +769,7 @@ static const struct type *type_from_bexp(const struct ast_node *const node,
     assert(bexp->type == NULL);
 
     if (bexp->op == LEX_TK_SCOP) {
-        return INVALID_NULL("operator not implemented", node);
+        return type_from_scoped_name(node, scope);
     }
 
     const struct type *const lhs_type = type_from_expr(bexp->lhs, scope);
@@ -1512,74 +1610,7 @@ static const struct type *type_from_expr(const struct ast_node *const node,
     case AST_AN_AEXP: expr_type = type_from_aexp(node, scope); break;
     case AST_AN_TEXP: expr_type = type_from_texp(node, scope); break;
 
-    case AST_AN_NAME: {
-        struct ast_name *const name = ast_data(node, name);
-        assert(name->type == NULL);
-
-        const struct scope_obj *const found =
-            scope_find_object(scope, (const struct lex_symbol *) node->ltok);
-
-        if (!found) {
-            return INVALID_NULL("undefined symbol", node);
-        }
-
-        name->scoped = found;
-
-        if (unlikely(!(name->type = type_alloc))) {
-            return NOMEM_NULL;
-        }
-
-        switch (found->obj) {
-        case SCOPE_OBJ_BCON:
-        case SCOPE_OBJ_PARM:
-        case SCOPE_OBJ_GVAR:
-        case SCOPE_OBJ_AVAR: {
-            const struct type *src_type;
-
-            if (found->obj == SCOPE_OBJ_GVAR || found->obj == SCOPE_OBJ_AVAR) {
-                src_type = ast_data(found->decl, decl)->type;
-            } else if (found->obj == SCOPE_OBJ_PARM) {
-                src_type = found->type;
-            } else {
-                src_type = scope_builtin_consts[found->bcon_id].type;
-            }
-
-            if (unlikely(type_copy(name->type, src_type))) {
-                return type_free(name->type), name->type = NULL, NOMEM_NULL;
-            }
-        } break;
-
-        case SCOPE_OBJ_BFUN:
-        case SCOPE_OBJ_FUNC: {
-            struct type src_type = (struct type) {
-                .t = TYPE_FPTR,
-                .count = 1,
-            };
-
-            if (found->obj == SCOPE_OBJ_BFUN) {
-                const struct scope_builtin_func *const bfun =
-                    &scope_builtin_funcs[found->bfun_id];
-
-                src_type.param_count = bfun->param_count;
-                src_type.params = (struct type_nt_pair *) bfun->params;
-                src_type.rettype = (struct type *) bfun->rettype;
-            } else {
-                const struct ast_func *const func = ast_data(found->func, func);
-                src_type.param_count = func->param_count;
-                src_type.params = func->params;
-                src_type.rettype = func->rettype;
-            }
-
-            if (unlikely(type_copy(name->type, &src_type))) {
-                return type_free(name->type), name->type = NULL, NOMEM_NULL;
-            }
-        } break;
-
-        default: assert(0), abort();
-        }
-
-        expr_type = name->type;
-    } break;
+    case AST_AN_NAME: expr_type = type_from_name(node, scope); break;
 
     case AST_AN_NMBR: {
         struct ast_nmbr *const nmbr = ast_data(node, nmbr);

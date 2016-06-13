@@ -13,7 +13,7 @@ entry
     iter: u32 = 0:u32;
     aa, bb: e1;
     aa = bb;
-    aa::red::22::44;
+    aa::dsdsd::f;
     ps("Test: "), pu8(123), pnl();
 
     do {
