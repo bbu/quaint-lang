@@ -667,26 +667,69 @@ static const struct type *type_from_scoped_name(const struct ast_node *const nod
     struct ast_bexp *const bexp = ast_data(node, bexp);
     assert(bexp->op == LEX_TK_SCOP);
 
-    (void) bexp;
     (void) scope;
-
     const struct ast_node *list = node;
+    size_t name_count = 0;
 
     do {
         const bool not_last =
             list->an == AST_AN_BEXP && ast_data(list, bexp)->op == LEX_TK_SCOP;
 
-        const struct ast_node *const name = not_last ? ast_data(list, bexp)->lhs : list;
+        const struct ast_node *const name =
+            not_last ? ast_data(list, bexp)->lhs : list;
+
         list = not_last ? ast_data(list, bexp)->rhs : NULL;
 
         if (name->an != AST_AN_NAME) {
-            return INVALID_NULL("only a name can appear in a scope operator", name);
+            return INVALID_NULL("only a name can be scoped", name);
         }
 
-        //lex_print_symbol(stdout, "%.*s\n", (const struct lex_symbol *) name->ltok);
+        name_count++;
     } while (list);
 
-    return INVALID_NULL("operator not implemented", node);
+    if (name_count > 2) {
+        return INVALID_NULL("no more than 2 names can be scoped", node);
+    }
+
+    const struct ast_node *const first_name = bexp->lhs;
+    const struct ast_node *const second_name = bexp->rhs;
+
+    const struct type *const found_type =
+        type_symtab_find((const struct lex_symbol *) first_name->ltok);
+
+    if (!found_type) {
+        return INVALID_NULL("type not found", first_name);
+    }
+
+    if (found_type->t != TYPE_ENUM) {
+        return INVALID_NULL("type is not an enum", first_name);
+    }
+
+    bool found_enum_value = false;
+
+    for (size_t idx = 0; idx < found_type->value_count; ++idx) {
+        if (lex_symbols_equal(found_type->values[idx].name,
+            (const struct lex_symbol *) second_name->ltok)) {
+
+            found_enum_value = true;
+            break;
+        }
+    }
+
+    if (!found_enum_value) {
+        return INVALID_NULL("enum value not found", second_name);
+    }
+
+    if (unlikely(!(bexp->type = type_alloc))) {
+        return NOMEM_NULL;
+    }
+
+    if (unlikely(type_copy(bexp->type, found_type))) {
+        return type_free(bexp->type), bexp->type = NULL, NOMEM_NULL;
+    }
+
+    bexp->type->count = 1;
+    return bexp->type;
 }
 
 static const struct type *type_from_expr(const struct ast_node *,
@@ -1140,7 +1183,7 @@ static const struct type *type_from_uexp(const struct ast_node *const node,
 
     const struct type *rhs_type;
     type_t t;
-    uint8_t scalar;
+    bool scalar;
 
     if (uexp->op != LEX_TK_SZOF && uexp->op != LEX_TK_ALOF) {
         rhs_type = type_from_expr(uexp->rhs, scope);
@@ -1408,7 +1451,7 @@ static const struct type *type_from_xexp(const struct ast_node *const node,
     }
 
     const type_t t = lhs_type->t;
-    const uint8_t scalar = lhs_type->count == 1;
+    const bool scalar = lhs_type->count == 1;
 
     switch (xexp->op) {
     case LEX_TK_INCR:

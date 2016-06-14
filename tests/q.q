@@ -2,7 +2,8 @@ type a: struct(a: int, b: byte, c: long, d: u8);
 exposed type b: union(c: int);
 
 exposed type e1: enum(red, green, blue): u32;
-exposed type e2: enum(abc, def, dd);
+exposed type e2: enum(abc, def, dd): u32;
+exposed type e3: e2[3];
 // math::e1::green, e1::green
 
 entry
@@ -13,7 +14,9 @@ entry
     iter: u32 = 0:u32;
     aa, bb: e1;
     aa = bb;
-    aa::dsdsd::f;
+    x: e1 = e1::blue + e2::abc;
+    ps("x: "), pu32(x:u32), pnl();
+    ps("eq: "), pu8(x == e2::aa), pnl();
     ps("Test: "), pu8(123), pnl();
 
     do {

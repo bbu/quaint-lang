@@ -608,6 +608,38 @@ static int gen_bexp_asmu(const struct ast_node *const expr,
     return *result = res1, CODEGEN_OK;
 }
 
+static int gen_bexp_scop(const struct ast_node *const expr,
+    struct codegen_opd *const result, const bool need_lvalue)
+{
+    (void) need_lvalue;
+    const struct ast_bexp *const bexp = ast_data(expr, bexp);
+    assert(bexp->op == LEX_TK_SCOP);
+    const size_t size = bexp->type->count * bexp->type->size;
+
+    switch (bexp->type->t) {
+    case TYPE_ENUM: {
+        const struct ast_node *const value_name = bexp->rhs;
+        uint64_t value = 0;
+
+        for (size_t idx = 0; idx < bexp->type->value_count; ++idx) {
+            if (lex_symbols_equal(bexp->type->values[idx].name,
+                (const struct lex_symbol *) value_name->ltok)) {
+
+                value = bexp->type->values[idx].value;
+                break;
+            }
+        }
+
+        OPD_IMM(src, 0, value, size);
+        *result = src;
+    } break;
+
+    default: assert(0), abort();
+    }
+
+    return CODEGEN_OK;
+}
+
 static int gen_bexp_atsi(const struct ast_node *const expr,
     struct codegen_opd *const result, const bool need_lvalue)
 {
@@ -1351,7 +1383,7 @@ static int gen_expr(const struct ast_node *const expr,
         case LEX_TK_ASXO:
         case LEX_TK_ASOR: gen = gen_bexp_asmu; break;
         case LEX_TK_COLN: gen = gen_bexp_cast; break;
-        case LEX_TK_SCOP:
+        case LEX_TK_SCOP: gen = gen_bexp_scop; break;
         case LEX_TK_ATSI: gen = gen_bexp_atsi; break;
         case LEX_TK_MEMB: gen = gen_bexp_memb; break;
         case LEX_TK_AROW: gen = gen_bexp_arow; break;
@@ -1413,9 +1445,9 @@ static int gen_expr(const struct ast_node *const expr,
     case AST_AN_AEXP: gen = gen_aexp; break;
     case AST_AN_TEXP: gen = gen_texp; break;
 
+    case AST_AN_NAME: gen = gen_name; break;
     case AST_AN_NMBR: gen = gen_nmbr; break;
     case AST_AN_STRL: gen = gen_strl; break;
-    case AST_AN_NAME: gen = gen_name; break;
 
     default: assert(0), abort();
     }
