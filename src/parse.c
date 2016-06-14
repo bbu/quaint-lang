@@ -271,7 +271,7 @@ static void destroy_stack(void)
 static inline bool term_eq_node(const struct term *const term,
     const struct parse_node *const node)
 {
-    const int node_is_leaf = node->nchildren == 0;
+    const bool node_is_leaf = node->nchildren == 0;
 
     if (term->is_tk == node_is_leaf) {
         if (node_is_leaf) {
@@ -306,7 +306,7 @@ static size_t match_rule(const struct rule *const rule, size_t *const at)
         }
     } while (st_idx >= 0 && !(term->is_tk && term->tk == LEX_TK_COUNT));
 
-    const int reached_eor = term && term->is_tk && term->tk == LEX_TK_COUNT;
+    const bool reached_eor = term && term->is_tk && term->tk == LEX_TK_COUNT;
 
     if (reached_eor) {
         if (prev) {
@@ -503,7 +503,7 @@ static void diagnose_error(void)
     struct status {
         const struct term *prev, *beg, *pos, *end;
         size_t prefix_len;
-        uint8_t accepted;
+        bool accepted;
     };
 
     struct status statuses[GRAMMAR_SIZE];
@@ -519,7 +519,7 @@ static void diagnose_error(void)
             .pos = beg,
             .end = grammar[rule_idx].rhs + RULE_RHS_LAST + 1,
             .prefix_len = 0,
-            .accepted = 1,
+            .accepted = true,
         };
     }
 
@@ -527,7 +527,7 @@ static void diagnose_error(void)
 
     do {
         const struct parse_node *const node = &stack.nodes[st_idx];
-        int did_accept = 0;
+        bool did_accept = false;
 
         for (size_t rule_idx = 0; rule_idx < GRAMMAR_SIZE; ++rule_idx) {
             struct status *const status = &statuses[rule_idx];
@@ -535,12 +535,12 @@ static void diagnose_error(void)
             if (status->accepted) {
                 match_again:
                 if (term_eq_node(status->pos, node)) {
-                    did_accept = 1;
+                    did_accept = true;
                     status->prev = status->pos->is_mt ? status->pos : NULL;
                     status->pos++;
                     status->prefix_len++;
                 } else if (status->prev && term_eq_node(status->prev, node)) {
-                    did_accept = 1;
+                    did_accept = true;
                     status->prefix_len++;
                 } else if (status->pos->is_mt) {
                     status->prev = NULL;
@@ -550,17 +550,17 @@ static void diagnose_error(void)
                         goto match_again;
                     }
                 } else {
-                    status->accepted = 0;
+                    status->accepted = false;
                 }
             }
         }
 
         if (!did_accept) {
-            int all_unmatched = 1;
+            bool all_unmatched = true;
 
             for (size_t rule_idx = 0; rule_idx < GRAMMAR_SIZE; ++rule_idx) {
                 if (statuses[rule_idx].prefix_len) {
-                    all_unmatched = 0;
+                    all_unmatched = false;
                     break;
                 }
             }
@@ -575,7 +575,7 @@ static void diagnose_error(void)
                     statuses[rule_idx].prev = NULL;
                     statuses[rule_idx].pos = statuses[rule_idx].beg;
                     statuses[rule_idx].prefix_len = 0;
-                    statuses[rule_idx].accepted = 1;
+                    statuses[rule_idx].accepted = true;
                 }
             }
         }
