@@ -1247,6 +1247,83 @@ static int gen_texp(const struct ast_node *const expr,
     return *result = res, CODEGEN_OK;
 }
 
+static int gen_nmbr(const struct ast_node *const expr,
+    struct codegen_opd *const result, const bool need_lvalue)
+{
+    (void) need_lvalue;
+    const struct ast_nmbr *const nmbr = ast_data(expr, nmbr);
+    const type_t t = nmbr->type->t;
+    const uint8_t signd = type_is_integral(t) && type_is_signed(t);
+    OPD_IMM(src, signd, nmbr->value, nmbr->type->size);
+    return *result = src, CODEGEN_OK;
+}
+
+static int gen_strl(const struct ast_node *const expr,
+    struct codegen_opd *const result, const bool need_lvalue)
+{
+    (void) need_lvalue;
+    const struct ast_strl *const strl = ast_data(expr, strl);
+    const size_t str_beg = o->data_size + o->strings.size;
+
+    if (unlikely(push_string(strl->str.beg, strl->str.end))) {
+        return NOMEM;
+    }
+
+    OPD_GLOB(src, 0, str_beg, 1);
+    OPD_TEMP(dst, 0, 8);
+    INSN_UN(REF, dst, src);
+    return *result = dst, CODEGEN_OK;
+}
+
+static int gen_name(const struct ast_node *const expr,
+    struct codegen_opd *const result, const bool need_lvalue)
+{
+    (void) need_lvalue;
+    const struct ast_name *const name = ast_data(expr, name);
+    assert(name->scoped != NULL);
+    const struct scope_obj *const scoped = name->scoped;
+    const uintptr_t key = (uintptr_t) scoped->name;
+    const type_t t = name->type->t;
+    const uint8_t signd = type_is_integral(t) && type_is_signed(t);
+
+    switch (scoped->obj) {
+    case SCOPE_OBJ_GVAR: {
+        const struct ofs *const ofs = htab_get(globals, key);
+        OPD_GLOB(src, signd, ofs->off, ofs->size);
+        *result = src;
+    } break;
+
+    case SCOPE_OBJ_AVAR:
+    case SCOPE_OBJ_PARM: {
+        const struct ofs *const ofs = htab_get(ftag->layout, key);
+        OPD_AUTO(src, signd, ofs->off, ofs->size);
+        *result = src;
+    } break;
+
+    case SCOPE_OBJ_BCON: {
+        assert(scoped->bcon_id < SCOPE_BCON_ID_COUNT);
+        const uint64_t value = const_values[scoped->bcon_id];
+        OPD_IMM(src, signd, value, name->type->size * name->type->count);
+        *result = src;
+    } break;
+
+    case SCOPE_OBJ_BFUN: {
+        assert(scoped->bfun_id < SCOPE_BFUN_ID_COUNT);
+        OPD_IMM(src, 0, scoped->bfun_id, 8);
+        *result = src;
+    } break;
+
+    case SCOPE_OBJ_FUNC: {
+        OPD_IMM(src, 0, (uintptr_t) scoped->func, 0);
+        *result = src;
+    } break;
+
+    default: assert(0), abort();
+    }
+
+    return CODEGEN_OK;
+}
+
 static int gen_expr(const struct ast_node *const expr,
     struct codegen_opd *const result, const bool need_lvalue)
 {
@@ -1336,76 +1413,15 @@ static int gen_expr(const struct ast_node *const expr,
     case AST_AN_AEXP: gen = gen_aexp; break;
     case AST_AN_TEXP: gen = gen_texp; break;
 
-    case AST_AN_NMBR: {
-        const struct ast_nmbr *const nmbr = ast_data(expr, nmbr);
-        const type_t t = nmbr->type->t;
-        const uint8_t signd = type_is_integral(t) && type_is_signed(t);
-        OPD_IMM(src, signd, nmbr->value, nmbr->type->size);
-        *result = src;
-    } break;
-
-    case AST_AN_STRL: {
-        const struct ast_strl *const strl = ast_data(expr, strl);
-        const size_t str_beg = o->data_size + o->strings.size;
-
-        if (unlikely(push_string(strl->str.beg, strl->str.end))) {
-            return NOMEM;
-        }
-
-        OPD_GLOB(src, 0, str_beg, 1);
-        OPD_TEMP(dst, 0, 8);
-        INSN_UN(REF, dst, src);
-        *result = dst;
-    } break;
-
-    case AST_AN_NAME: {
-        const struct ast_name *const name = ast_data(expr, name);
-        assert(name->scoped != NULL);
-        const struct scope_obj *const scoped = name->scoped;
-        const uintptr_t key = (uintptr_t) scoped->name;
-        const type_t t = name->type->t;
-        const uint8_t signd = type_is_integral(t) && type_is_signed(t);
-
-        switch (scoped->obj) {
-        case SCOPE_OBJ_GVAR: {
-            const struct ofs *const ofs = htab_get(globals, key);
-            OPD_GLOB(src, signd, ofs->off, ofs->size);
-            *result = src;
-        } break;
-
-        case SCOPE_OBJ_AVAR:
-        case SCOPE_OBJ_PARM: {
-            const struct ofs *const ofs = htab_get(ftag->layout, key);
-            OPD_AUTO(src, signd, ofs->off, ofs->size);
-            *result = src;
-        } break;
-
-        case SCOPE_OBJ_BCON: {
-            assert(scoped->bcon_id < SCOPE_BCON_ID_COUNT);
-            const uint64_t value = const_values[scoped->bcon_id];
-            OPD_IMM(src, signd, value, name->type->size * name->type->count);
-            *result = src;
-        } break;
-
-        case SCOPE_OBJ_BFUN: {
-            assert(scoped->bfun_id < SCOPE_BFUN_ID_COUNT);
-            OPD_IMM(src, 0, scoped->bfun_id, 8);
-            *result = src;
-        } break;
-
-        case SCOPE_OBJ_FUNC: {
-            OPD_IMM(src, 0, (uintptr_t) scoped->func, 0);
-            *result = src;
-        } break;
-
-        default: assert(0), abort();
-        }
-    } break;
+    case AST_AN_NMBR: gen = gen_nmbr; break;
+    case AST_AN_STRL: gen = gen_strl; break;
+    case AST_AN_NAME: gen = gen_name; break;
 
     default: assert(0), abort();
     }
 
-    return gen ? gen(expr, result, need_lvalue) : CODEGEN_OK;
+    assert(gen != NULL);
+    return gen(expr, result, need_lvalue);
 }
 
 static int gen_decl_auto(const struct ast_node *const stmt)

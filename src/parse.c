@@ -585,8 +585,8 @@ static void diagnose_error(void)
 struct parse_node parse(const struct lex_token *const tokens, const size_t ntokens)
 {
     static const struct lex_token
-        reject     = { .tk = PARSE_REJECT },
-        nomem      = { .tk = PARSE_NOMEM  };
+        reject = { .tk = PARSE_REJECT },
+        nomem  = { .tk = PARSE_NOMEM  };
 
     static const struct parse_node
         err_reject = { .nchildren = 0, .token = &reject },
@@ -637,7 +637,7 @@ struct parse_node parse(const struct lex_token *const tokens, const size_t ntoke
     #undef SHIFT_OR_NOMEM
     #undef REDUCE_OR_NOMEM
 
-    const int accepted = stack.size == 1 &&
+    const bool accepted = stack.size == 1 &&
         stack.nodes[0].nchildren && stack.nodes[0].nt == PARSE_NT_Unit;
 
     if (accepted) {
