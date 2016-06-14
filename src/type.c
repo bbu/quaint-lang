@@ -1225,6 +1225,11 @@ static const struct type *type_from_uexp(const struct ast_node *const node,
             goto fail_free;
         }
 
+        if (t == TYPE_ENUM) {
+            INVALID("unary minus to enum", uexp->rhs);
+            goto fail_free;
+        }
+
         if (type_is_unsigned(t)) {
             uexp->type->t++;
         }
