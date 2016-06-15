@@ -1279,34 +1279,6 @@ static int gen_texp(const struct ast_node *const expr,
     return *result = res, CODEGEN_OK;
 }
 
-static int gen_nmbr(const struct ast_node *const expr,
-    struct codegen_opd *const result, const bool need_lvalue)
-{
-    (void) need_lvalue;
-    const struct ast_nmbr *const nmbr = ast_data(expr, nmbr);
-    const type_t t = nmbr->type->t;
-    const uint8_t signd = type_is_integral(t) && type_is_signed(t);
-    OPD_IMM(src, signd, nmbr->value, nmbr->type->size);
-    return *result = src, CODEGEN_OK;
-}
-
-static int gen_strl(const struct ast_node *const expr,
-    struct codegen_opd *const result, const bool need_lvalue)
-{
-    (void) need_lvalue;
-    const struct ast_strl *const strl = ast_data(expr, strl);
-    const size_t str_beg = o->data_size + o->strings.size;
-
-    if (unlikely(push_string(strl->str.beg, strl->str.end))) {
-        return NOMEM;
-    }
-
-    OPD_GLOB(src, 0, str_beg, 1);
-    OPD_TEMP(dst, 0, 8);
-    INSN_UN(REF, dst, src);
-    return *result = dst, CODEGEN_OK;
-}
-
 static int gen_name(const struct ast_node *const expr,
     struct codegen_opd *const result, const bool need_lvalue)
 {
@@ -1354,6 +1326,34 @@ static int gen_name(const struct ast_node *const expr,
     }
 
     return CODEGEN_OK;
+}
+
+static int gen_nmbr(const struct ast_node *const expr,
+    struct codegen_opd *const result, const bool need_lvalue)
+{
+    (void) need_lvalue;
+    const struct ast_nmbr *const nmbr = ast_data(expr, nmbr);
+    const type_t t = nmbr->type->t;
+    const uint8_t signd = type_is_integral(t) && type_is_signed(t);
+    OPD_IMM(src, signd, nmbr->value, nmbr->type->size);
+    return *result = src, CODEGEN_OK;
+}
+
+static int gen_strl(const struct ast_node *const expr,
+    struct codegen_opd *const result, const bool need_lvalue)
+{
+    (void) need_lvalue;
+    const struct ast_strl *const strl = ast_data(expr, strl);
+    const size_t str_beg = o->data_size + o->strings.size;
+
+    if (unlikely(push_string(strl->str.beg, strl->str.end))) {
+        return NOMEM;
+    }
+
+    OPD_GLOB(src, 0, str_beg, 1);
+    OPD_TEMP(dst, 0, 8);
+    INSN_UN(REF, dst, src);
+    return *result = dst, CODEGEN_OK;
 }
 
 static int gen_expr(const struct ast_node *const expr,

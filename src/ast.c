@@ -614,6 +614,40 @@ static int validate_typespec(const struct parse_node *const node,
     }
 }
 
+static inline type_t enum_type_from_maxval(const uintmax_t max_value)
+{
+    if (max_value <= 0xFF) {
+        return TYPE_U8;
+    } else if (max_value <= 0xFFFF) {
+        return TYPE_U16;
+    } else if (max_value <= 0xFFFFFFFF) {
+        return TYPE_U32;
+    } else {
+        return TYPE_U64;
+    }
+}
+
+static inline uintmax_t enum_boundary_from_type(const type_t t_enum)
+{
+    switch (t_enum) {
+    case TYPE_U8:
+        return 0xFF;
+
+    case TYPE_U16:
+        return 0xFFFF;
+
+    case TYPE_U32:
+        return 0xFFFFFFFF;
+
+    case TYPE_U64:
+    case TYPE_USIZE:
+    case TYPE_UPTR:
+        return 0xFFFFFFFFFFFFFFFF;
+
+    default: assert(0), abort();
+    }
+}
+
 static int validate_typespec_enum(const struct parse_node *const node,
     struct type *const type)
 {
@@ -698,44 +732,10 @@ static int validate_typespec_enum(const struct parse_node *const node,
     const uintmax_t max_value = type->value_count - 1;
 
     if (t_enum == TYPE_VOID) {
-        if (max_value <= 0xFF) {
-            t_enum = TYPE_U8;
-        } else if (max_value <= 0xFFFF) {
-            t_enum = TYPE_U16;
-        } else if (max_value <= 0xFFFFFFFF) {
-            t_enum = TYPE_U32;
-        } else {
-            t_enum = TYPE_U64;
-        }
-    } else {
-        uintmax_t boundary;
-
-        switch (t_enum) {
-        case TYPE_U8:
-            boundary = 0xFF;
-            break;
-
-        case TYPE_U16:
-            boundary = 0xFFFF;
-            break;
-
-        case TYPE_U32:
-            boundary = 0xFFFFFFFF;
-            break;
-
-        case TYPE_U64:
-        case TYPE_USIZE:
-        case TYPE_UPTR:
-            boundary = 0xFFFFFFFFFFFFFFFF;
-            break;
-
-        default: assert(0), abort();
-        }
-
-        if (max_value > boundary) {
-            free(values);
-            return INVALID("enum values do not fit into the specified type", node);
-        }
+        t_enum = enum_type_from_maxval(max_value);
+    } else if (max_value > enum_boundary_from_type(t_enum)) {
+        free(values);
+        return INVALID("enum values do not fit into the specified type", node);
     }
 
     type->t = TYPE_ENUM;
