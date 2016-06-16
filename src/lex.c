@@ -245,6 +245,7 @@ TOKEN_DEFINE_4(tk_else, "else")
 TOKEN_DEFINE_2(tk_dowh, "do")
 TOKEN_DEFINE_5(tk_whil, "while")
 TOKEN_DEFINE_6(tk_retn, "return")
+TOKEN_DEFINE_3(tk_useu, "use")
 TOKEN_DEFINE_4(tk_type, "type")
 
 TOKEN_DEFINE_1(tk_assn, "=")
@@ -328,6 +329,7 @@ static sts_t (*const tk_funcs[])(const uint8_t, uint8_t *const) = {
     tk_dowh,
     tk_whil,
     tk_retn,
+    tk_useu,
     tk_type,
 
     tk_assn,

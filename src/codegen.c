@@ -261,7 +261,9 @@ static inline void count_top_decls_and_funcs(const struct ast_node *const root,
         assert(stmt != NULL);
 
         switch (stmt->an) {
-        case AST_AN_TYPE: break;
+        case AST_AN_USEU:
+        case AST_AN_TYPE:
+            break;
 
         case AST_AN_FUNC:
             (*func_count)++;
@@ -470,7 +472,9 @@ static int create_global_and_frame_layouts(const struct ast_node *const root,
         assert(stmt != NULL);
 
         switch (stmt->an) {
-        case AST_AN_TYPE: break;
+        case AST_AN_USEU:
+        case AST_AN_TYPE:
+            break;
 
         case AST_AN_DECL: {
             const struct ast_decl *const decl = ast_data(stmt, decl);
@@ -1974,6 +1978,7 @@ int codegen_obj_create(const struct ast_node *const root,
         assert(stmt->an != AST_AN_VOID);
 
         switch (stmt->an) {
+        case AST_AN_USEU:
         case AST_AN_TYPE:
         case AST_AN_DECL:
             break;

@@ -38,6 +38,7 @@ enum {
     LEX_TK_DOWH, // do keyword
     LEX_TK_WHIL, // while keyword
     LEX_TK_RETN, // return keyword
+    LEX_TK_USEU, // use keyword
     LEX_TK_TYPE, // type keyword
 
     LEX_TK_ASSN, // (binary) assignment

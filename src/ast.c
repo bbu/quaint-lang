@@ -778,14 +778,12 @@ static int validate_blok(const struct parse_node *const blok,
         return NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_blok *const ast_blok = ast_data(*ast, blok);
-
-    set_node(ast_node, noint ? AST_AN_NOIN : AST_AN_BLOK, parent, blok);
+    set_node(*ast, noint ? AST_AN_NOIN : AST_AN_BLOK, parent, blok);
     ast_blok->stmt_count = stmt_count;
 
     return validate_stmts(stmt_count, noint + 1,
-        blok->children, ast_blok->stmts, ast_node);
+        blok->children, ast_blok->stmts, *ast);
 }
 
 static int validate_func(const struct parse_node *const func,
@@ -823,7 +821,6 @@ static int validate_func(const struct parse_node *const func,
         return NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_func *const ast_func = ast_data(*ast, func);
 
     if (expr_is_atom(LEX_TK_NAME, child)) {
@@ -893,12 +890,12 @@ static int validate_func(const struct parse_node *const func,
         return INVALID("bad function signature", child);
     }
 
-    set_node(ast_node, AST_AN_FUNC, parent, func);
+    set_node(*ast, AST_AN_FUNC, parent, func);
     ast_func->expo = exposed;
     ast_func->stmt_count = stmt_count;
 
     return validate_stmts(stmt_count, qual_count + 2,
-        func->children, ast_func->stmts, ast_node);
+        func->children, ast_func->stmts, *ast);
 }
 
 static int validate_ctrl(const struct parse_node *const ctrl,
@@ -930,14 +927,12 @@ static int validate_cond(const struct parse_node *const ctrl,
         return NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_cond *const ast_cond = ast_data(*ast, cond);
-
-    set_node(ast_node, AST_AN_COND, parent, ctrl);
+    set_node(*ast, AST_AN_COND, parent, ctrl);
     ast_cond->elif_count = elif_count;
 
     const struct parse_node *const cond = ctrl->children[0];
-    int error = validate_expr(cond->children[1], &ast_cond->if_expr, ast_node);
+    int error = validate_expr(cond->children[1], &ast_cond->if_expr, *ast);
     const size_t if_stmt_count = cond->nchildren - 4;
 
     if (unlikely(!(ast_cond->if_block = alloc_node(blok,
@@ -945,7 +940,7 @@ static int validate_cond(const struct parse_node *const ctrl,
 
         aggr_error(&error, NOMEM);
     } else {
-        set_node(ast_cond->if_block, AST_AN_BLOK, ast_node, cond);
+        set_node(ast_cond->if_block, AST_AN_BLOK, *ast, cond);
         ast_data(ast_cond->if_block, blok)->stmt_count = if_stmt_count;
 
         aggr_error(&error, validate_stmts(if_stmt_count, 3, cond->children,
@@ -957,14 +952,14 @@ static int validate_cond(const struct parse_node *const ctrl,
         const size_t elif_stmt_count = elif->nchildren - 4;
 
         aggr_error(&error, validate_expr(elif->children[1],
-            &ast_cond->elif[elif_idx].expr, ast_node));
+            &ast_cond->elif[elif_idx].expr, *ast));
 
         if (unlikely(!(ast_cond->elif[elif_idx].block = alloc_node(blok,
             elif_stmt_count * sizeof(struct ast_node *))))) {
 
             aggr_error(&error, NOMEM);
         } else {
-            set_node(ast_cond->elif[elif_idx].block, AST_AN_BLOK, ast_node, elif);
+            set_node(ast_cond->elif[elif_idx].block, AST_AN_BLOK, *ast, elif);
             ast_data(ast_cond->elif[elif_idx].block, blok)->stmt_count =
                 elif_stmt_count;
 
@@ -983,7 +978,7 @@ static int validate_cond(const struct parse_node *const ctrl,
 
             aggr_error(&error, NOMEM);
         } else {
-            set_node(ast_cond->else_block, AST_AN_BLOK, ast_node, els);
+            set_node(ast_cond->else_block, AST_AN_BLOK, *ast, els);
             ast_data(ast_cond->else_block, blok)->stmt_count = else_stmt_count;
 
             aggr_error(&error, validate_stmts(else_stmt_count, 2, els->children,
@@ -1005,16 +1000,14 @@ static int validate_whil(const struct parse_node *const whil,
         return NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_whil *const ast_whil = ast_data(*ast, whil);
-
-    set_node(ast_node, AST_AN_WHIL, parent, whil);
+    set_node(*ast, AST_AN_WHIL, parent, whil);
     ast_whil->stmt_count = stmt_count;
 
     int error = validate_expr(whil->children[1], &ast_whil->expr, *ast);
 
     aggr_error(&error, validate_stmts(stmt_count, 3,
-        whil->children, ast_whil->stmts, ast_node));
+        whil->children, ast_whil->stmts, *ast));
 
     return error;
 }
@@ -1030,19 +1023,66 @@ static int validate_dowh(const struct parse_node *const dowh,
         return NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_dowh *const ast_dowh = ast_data(*ast, dowh);
 
-    set_node(ast_node, AST_AN_DOWH, parent, dowh);
+    set_node(*ast, AST_AN_DOWH, parent, dowh);
     ast_dowh->stmt_count = stmt_count;
 
     int error = validate_stmts(stmt_count, 2,
-        dowh->children, ast_dowh->stmts, ast_node);
+        dowh->children, ast_dowh->stmts, *ast);
 
     aggr_error(&error, validate_expr(dowh->children[dowh->nchildren - 2],
-        &ast_dowh->expr, ast_node));
+        &ast_dowh->expr, *ast));
 
     return error;
+}
+
+static int validate_useu(const struct parse_node *const stmt,
+    struct ast_node **const ast, const struct ast_node *const parent)
+{
+    const struct parse_node *const expr = stmt->children[1];
+    const struct lex_token *unit, *ns;
+
+    if (expr_is_atom(LEX_TK_STRL, expr)) {
+        unit = expr->children[0]->children[0]->token;
+        ns = NULL;
+    } else if (expr_is(PARSE_NT_Bexp, expr)) {
+        const struct parse_node *const left = expr->children[0]->children[0];
+        const struct parse_node *const op = expr->children[0]->children[1];
+        const struct parse_node *const right = expr->children[0]->children[2];
+
+        if (!expr_is_atom(LEX_TK_STRL, left)) {
+            return INVALID("bad use statement, expecting a string literal", left);
+        }
+
+        if (parse_node_tk(op) != LEX_TK_CAST) {
+            return INVALID("bad use statement, expecting an as operator", op);
+        }
+
+        if (!expr_is_atom(LEX_TK_NAME, right)) {
+            return INVALID("bad use statement, expecting a name", right);
+        }
+
+        unit = left->children[0]->children[0]->token;
+        ns = right->children[0]->children[0]->token;
+    } else {
+        return INVALID("bad use statement, expecting a string literal", expr);
+    }
+
+    if (unlikely(!(*ast = alloc_node(useu, 0)))) {
+        return NOMEM;
+    }
+
+    struct ast_useu *const ast_useu = ast_data(*ast, useu);
+    set_node(*ast, AST_AN_USEU, parent, stmt);
+
+    ast_useu->unit = (struct lex_symbol) {
+        .beg = unit->beg + 1,
+        .end = unit->end - 1,
+    };
+
+    ast_useu->ns = (const struct lex_symbol *) ns;
+    return AST_OK;
 }
 
 static int validate_type(const struct parse_node *const stmt,
@@ -1094,10 +1134,9 @@ static int validate_type(const struct parse_node *const stmt,
             INVALID("redefinition of type", bexp->children[0]);
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_type *const ast_type = ast_data(*ast, type);
 
-    set_node(ast_node, AST_AN_TYPE, parent, stmt);
+    set_node(*ast, AST_AN_TYPE, parent, stmt);
     ast_type->expo = expo;
     ast_type->name = name;
     ast_type->type = type;
@@ -1115,15 +1154,14 @@ static int validate_retn(const struct parse_node *const stmt,
         return NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_retn *const ast_retn = ast_data(*ast, retn);
     int error;
 
-    if (expr && (error = validate_expr(expr, &ast_retn->expr, ast_node))) {
+    if (expr && (error = validate_expr(expr, &ast_retn->expr, *ast))) {
         return ast_destroy(ast_retn->expr), error;
     }
 
-    set_node(ast_node, AST_AN_RETN, parent, stmt);
+    set_node(*ast, AST_AN_RETN, parent, stmt);
     return AST_OK;
 }
 
@@ -1169,7 +1207,6 @@ static int validate_wait(const struct parse_node *const stmt,
         return NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_wait *const ast_wait = ast_data(*ast, wait);
     int error;
 
@@ -1194,7 +1231,7 @@ static int validate_wait(const struct parse_node *const stmt,
             expr = expr->children[0]->children[0];
         }
 
-        if ((error = validate_expr(expr, &ast_wait->wfor, ast_node))) {
+        if ((error = validate_expr(expr, &ast_wait->wfor, *ast))) {
             return ast_destroy(ast_wait->wfor), error;
         }
 
@@ -1205,7 +1242,7 @@ static int validate_wait(const struct parse_node *const stmt,
     case wait_expr_wunt_expr_wnob: {
         const struct parse_node *expr = stmt->children[3];
 
-        if ((error = validate_expr(expr, &ast_wait->wunt, ast_node))) {
+        if ((error = validate_expr(expr, &ast_wait->wunt, *ast))) {
             return ast_destroy(ast_wait->wunt), error;
         }
 
@@ -1215,7 +1252,7 @@ static int validate_wait(const struct parse_node *const stmt,
     default: assert(0), abort();
     }
 
-    set_node(ast_node, AST_AN_WAIT, parent, stmt);
+    set_node(*ast, AST_AN_WAIT, parent, stmt);
     return AST_OK;
 }
 
@@ -1481,17 +1518,16 @@ static int validate_decl_or_expr(const struct parse_node *const stmt,
         return free(names), type_free(type), NOMEM;
     }
 
-    struct ast_node *const ast_node = *ast;
     struct ast_decl *const ast_decl = ast_data(*ast, decl);
 
     if (init_expr &&
-        (error = validate_expr(init_expr, &ast_decl->init_expr, ast_node))) {
+        (error = validate_expr(init_expr, &ast_decl->init_expr, *ast))) {
 
         return free(names), type_free(type),
             ast_destroy(ast_decl->init_expr), error;
     }
 
-    set_node(ast_node, AST_AN_DECL, parent, stmt);
+    set_node(*ast, AST_AN_DECL, parent, stmt);
     ast_decl->cons = cons;
     ast_decl->expo = expo;
     ast_decl->stat = stat;
@@ -1513,6 +1549,14 @@ static int validate_stmt(const struct parse_node *const stmt,
 
     if (parse_node_is_tk(stmt->children[0])) {
         switch (parse_node_tk(stmt->children[0])) {
+        case LEX_TK_USEU: {
+            if (ctx != CTX_UNIT) {
+                return INVALID("use statement not in unit context", stmt);
+            }
+
+            return validate_useu(stmt, ast, parent);
+        }
+
         case LEX_TK_EXPO:
         case LEX_TK_TYPE: {
             if (ctx != CTX_UNIT) {
@@ -1618,17 +1662,15 @@ int ast_build(const struct parse_node *const unit, struct ast_node **const root)
         return AST_NOMEM;
     }
 
-    struct ast_node *const ast_node = *root;
     struct ast_unit *const ast_unit = ast_data(*root, unit);
-
-    set_node(ast_node, AST_AN_UNIT, NULL, unit);
+    set_node(*root, AST_AN_UNIT, NULL, unit);
     ast_unit->stmt_count = stmt_count;
 
     assert(ctx_stack.size == 0);
     push_context(CTX_UNIT);
 
     const int error = validate_stmts(stmt_count, 1, unit->children,
-        ast_unit->stmts, ast_node);
+        ast_unit->stmts, *root);
 
     pop_context();
     assert(ctx_stack.size == 0);
@@ -1653,6 +1695,11 @@ void ast_destroy(const struct ast_node *const ast)
         }
 
         free(unit->scope);
+    } break;
+
+    case AST_AN_USEU: {
+        const struct ast_useu *const useu = ast_data(ast, useu);
+        (void) useu;
     } break;
 
     case AST_AN_TYPE: {
@@ -1870,15 +1917,29 @@ void ast_print(FILE *const out, const struct ast_node *const ast, const int leve
         print_end;
     } break;
 
+    case AST_AN_USEU: {
+        const struct ast_useu *const useu = ast_data(ast, useu);
+
+        print(YELLOW("useu "));
+        lex_print_symbol(out, WHITE("\"%.*s\""), &useu->unit);
+
+        if (useu->ns) {
+            print(GREEN(" as "));
+            lex_print_symbol(out, WHITE("%.*s"), useu->ns);
+        }
+
+        print("\n");
+    } break;
+
     case AST_AN_TYPE: {
         const struct ast_type *const type = ast_data(ast, type);
+        print(YELLOW("type "));
 
         if (type->expo) {
             print(GREEN("exposed "));
         }
 
-        print(YELLOW("type "));
-        lex_print_symbol(out, "%.*s: ", type->name);
+        lex_print_symbol(out, WHITE("%.*s: "), type->name);
         type_print(stdout, type->type);
         print("\n");
     } break;

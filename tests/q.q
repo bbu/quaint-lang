@@ -1,3 +1,7 @@
+use "";
+use "libs/trig/math" as math;
+use "libs/abc/math" as default;
+
 type a: struct(a: int, b: byte, c: long, d: u8);
 exposed type b: union(c: int);
 
@@ -6,7 +10,9 @@ exposed type e2: enum(abc, def, dd): u32;
 exposed type e3: e2[3];
 // math::e1::green, e1::green
 
-entry
+exposed xxx: ptr(int[15]) = null as ptr(int[15]);
+
+exposed entry
 {
     pu32(fibonacci(32:u32)), pnl();
     fib1: quaint(u32) = ~fibonacci(32 as u32);
@@ -16,7 +22,7 @@ entry
     aa = bb;
     x: e1 = e1::blue + e2::abc;
     ps("x: "), pu32(x:u32), pnl();
-    ps("eq: "), pu8(x == e2::aa), pnl();
+    //ps("eq: "), pu8(x == e2::aa), pnl();
     ps("Test: "), pu8(123), pnl();
 
     do {

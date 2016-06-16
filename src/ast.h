@@ -14,6 +14,7 @@ enum {
 
     AST_AN_UNIT, // translation unit
 
+    AST_AN_USEU, // use unit statement
     AST_AN_TYPE, // type declaration
     AST_AN_DECL, // variable declaration
 
@@ -62,6 +63,11 @@ struct ast_node {
 
 struct ast_unit {
     STMT_BLOCK;
+};
+
+struct ast_useu {
+    struct lex_symbol unit;
+    const struct lex_symbol *ns;
 };
 
 struct ast_type {

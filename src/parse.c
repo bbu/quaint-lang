@@ -75,6 +75,7 @@ static const struct rule grammar[] = {
     r4(Stmt, t(WAIT), n(Expr), t(WNOB), t(SCOL)                                )
     r3(Stmt, t(RETN), n(Expr), t(SCOL)                                         )
     r2(Stmt, t(RETN), t(SCOL)                                                  )
+    r3(Stmt, t(USEU), n(Expr), t(SCOL)                                         )
     r4(Stmt, t(EXPO), t(TYPE), n(Expr), t(SCOL)                                )
     r3(Stmt, t(TYPE), n(Expr), t(SCOL)                                         )
 

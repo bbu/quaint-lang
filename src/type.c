@@ -1922,6 +1922,7 @@ static int check_block(const struct ast_node *const node)
 
         switch (stmt->an) {
         case AST_AN_VOID:
+        case AST_AN_USEU:
         case AST_AN_TYPE:
         case AST_AN_FUNC:
             /* must have failed in ast_build() */
@@ -2007,6 +2008,9 @@ int type_check_ast(const struct ast_node *const root)
         case AST_AN_WAIT:
         case AST_AN_WLAB:
             /* must have failed in ast_build() */
+            break;
+
+        case AST_AN_USEU:
             break;
 
         case AST_AN_TYPE:
