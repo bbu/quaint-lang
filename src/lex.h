@@ -6,16 +6,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#define COLOURED(s, b, c) "\033[" #b ";" #c "m" s "\033[0m"
-
-#define GRAY(s)   COLOURED(s, 0, 37)
-#define RED(s)    COLOURED(s, 1, 31)
-#define GREEN(s)  COLOURED(s, 1, 32)
-#define YELLOW(s) COLOURED(s, 1, 33)
-#define ORANGE(s) COLOURED(s, 1, 34)
-#define CYAN(s)   COLOURED(s, 1, 36)
-#define WHITE(s)  COLOURED(s, 1, 37)
-
 enum {
     LEX_TK_NAME, // name
     LEX_TK_NMBR, // decimal integer literal
