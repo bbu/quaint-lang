@@ -20,6 +20,46 @@ exposed entry
     iter: u32 = 0:u32;
     aa, bb: e1;
     aa = bb;
+
+    [%glab]
+    const pipe_id: int = 3; [@wlab]
+
+    send item, sizeof(t);
+
+    //send data, sizeof(data) to
+
+    //spawn 5;
+
+    if id == 1 {
+        q <- 4;
+    } elif id == 2 {
+        q -> i;
+    } else {
+
+    }
+
+    for idx_i(0, 4): int {
+        for idx_j(0, 2): long {
+            test(idx_i, idx_j);
+        }
+    }
+
+    match(expr, case_expr, val_expr, case_expr, val_expr);
+    match(expr, 3, foo, 5, bar);
+
+    match ball.color {
+    case red, green, blue, yellow {
+        test();
+        test();
+    }
+
+    case black, silver, white:
+
+    }
+    }
+
+    spawn 3;
+
     x: e1 = e1::blue + e2::abc;
     ps("x: "), pu32(x:u32), pnl();
     //ps("eq: "), pu8(x == e2::aa), pnl();
@@ -33,6 +73,18 @@ exposed entry
     } while !fib1@end;
 
     pu32(*fib1), pnl(), pu32(*fib2), pnl();
+}
+
+test
+{
+    q: queue(struct(a: int, b: int)) = mq(8);
+
+    for idx(start: 0, stop: 4, step: 1): int {
+
+    }
+
+    q -> 3;
+    q <- 3;
 }
 
 factorial(number: byte): ulong

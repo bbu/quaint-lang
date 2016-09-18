@@ -15,7 +15,7 @@
 #include <errno.h>
 
 /* OS X doesn't have clock_gettime(), define a drop-in replacement */
-#ifdef __MACH__
+#if defined(__MACH__) && !defined(CLOCK_MONOTONIC)
 #include <mach/clock.h>
 #include <mach/mach.h>
 
