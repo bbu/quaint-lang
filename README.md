@@ -513,7 +513,6 @@ no effect – all global variables have zero values upon program startup.
 * No `for`, `switch`, `goto`, `break` and `continue` control-flow statements
 * No multidimensional arrays
 * No `float` and `double` types
-* No enums
 * No struct/union/array initialisers or compound literals
 * No escape sequences within string literals
 * No hex, octal or binary number literals
